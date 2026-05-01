@@ -1,0 +1,9 @@
+[
+  {
+    "objectID": "index.html#hour-totals",
+    "href": "index.html#hour-totals",
+    "title": "Hourly Activity",
+    "section": "Hour totals",
+    "text": "Hour totals\n\n\n                            \n                                            \n\n\nGenerated r format(Sys.time(), '%Y-%m-%d %H:%M:%S UTC')."
+  }
+]
