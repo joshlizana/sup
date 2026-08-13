@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+
+# uv / venv
+.venv/
+
+# Build artifacts
+build/
+dist/
+*.whl
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Type checkers
+.mypy_cache/
+.ruff_cache/
+.pytype/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+
+# sup runtime data (raw store, mart, catalog) — not source, shouldn't be committed
+*.sqlite
+*.sqlite3
+*.db
+*.wal
+*.parquet
