@@ -27,6 +27,9 @@ htmlcov/
 .idea/
 *.swp
 
+# Claude Code local overrides
+.claude/settings.local.json
+
 # OS
 .DS_Store
 

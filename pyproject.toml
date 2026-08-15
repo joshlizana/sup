@@ -8,7 +8,18 @@ authors = [
     { name = "Joshua Lizana", email = "josh.lizana@gmail.com" }
 ]
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "aioduckdb>=0.1.0",
+    "aiosqlite>=0.22.1",
+    "ducklake>=0.1.1",
+    "orjson>=3.12.0",
+    "platformdirs>=4.11.2",
+    "pyarrow>=25.0.1",
+    "pydantic>=2.13.4",
+    "textual>=8.2.8",
+    "typer>=0.27.1",
+    "websockets>=17.0.1",
+]
 
 [project.scripts]
 sup = "sup:main"

@@ -20,9 +20,15 @@ Relevant facts to design against:
   can be a sustained high-message-rate stream, not a trickle.
 - Jetstream supports resuming from a cursor after a reconnect, but it only
   replays a limited recent backlog — it is not a substitute for `sup`'s own
-  durable storage, only a mitigation for short gaps around reconnects. (The
-  exact retention window should be verified against current Jetstream docs
-  before relying on it for anything beyond "cover the reconnect gap.")
+  durable storage, only a mitigation for short gaps around reconnects.
+  **Confirmed** (was originally flagged here as needing verification):
+  connecting with a cursor older than the roll-back window doesn't error —
+  the server sends a "cursor too old" info message, then replays from the
+  oldest available message, then continues live. This is now load-bearing
+  for more than just reconnects — see
+  [TDD-0003](../tdd/0003-ingest-backfill-and-gap-recovery.md), which uses
+  this specifically to detect the current retention floor per endpoint on
+  every start.
 - Per ADR-0001, stdlib/third-party libraries (`sqlite3`, `duckdb`, etc.) are
   fair game; hand-rolling is reserved for genuine gaps.
 
@@ -34,55 +40,42 @@ the format feeds the downstream mart transform.
 
 ### Option A: Append-only JSONL segment files
 
-- Sequential appends to a rotating file (by size or time window), buffered in
-  memory and flushed/fsynced on a documented cadence (e.g. every N messages or
-  every N ms).
-- **Crash safety:** bounded, explicit loss window (whatever's unflushed at
-  crash time). A truncated last line on crash is possible and must be handled
-  on read (skip/repair trailing partial line).
-- **Backpressure:** very cheap to write (pure sequential append), decouples
-  socket-read from disk-write easily via a queue.
-- **Disk/compaction:** trivial — rotate, gzip completed segments, delete once
-  compacted into the mart.
-- **Feeds the mart:** straightforward — read line-by-line, parse JSON, load
-  into DuckDB (`read_json_auto` or similar) or Parquet on transform.
-- This is genuinely hand-rolled (per ADR-0001, that's intentional here — it's
-  close to the project's core).
+- Sequential appends to a rotating file, buffered in memory and fsynced on a
+  documented cadence.
+- **Crash safety:** bounded, explicit loss window; a truncated trailing line
+  needs repair on read.
+- **Backpressure:** the cheapest possible write path, easily decoupled from
+  the socket by a queue.
+- **Disk/compaction:** rotate, gzip, delete once compacted into the mart.
+- **Feeds the mart:** line-by-line into DuckDB or Parquet on transform.
+- Hand-rolled, which ADR-0001 reserves for the project's core.
 
 ### Option B: SQLite as a durable append buffer
 
-- Each message inserted as a row (batched into transactions for throughput),
-  WAL mode for crash safety and concurrent reads during writes.
-- **Crash safety:** strong — SQLite's transactional durability is well-tested.
-- **Backpressure:** insert-per-message is fine in small batches, but a
-  sustained high rate needs careful transaction batching to avoid becoming the
-  bottleneck; more moving parts to tune than a flat file.
-- **Disk/compaction:** a single growing file; deleting old rows requires
-  periodic `VACUUM` or it fragments/doesn't reclaim space.
-- **Feeds the mart:** tempting to query directly rather than transform,
-  which blurs the raw-store/mart boundary and risks lock contention between
-  the ingester (writer) and TUI/dashboard (readers) on the same file.
+- A row per message, batched into transactions, WAL for crash safety and
+  concurrent reads during writes.
+- **Crash safety:** strong — transactional durability is well tested.
+- **Backpressure:** sustained rates need careful transaction batching, with
+  more to tune than a flat file.
+- **Disk/compaction:** a single growing file; reclaiming space needs
+  periodic `VACUUM`.
+- **Feeds the mart:** invites querying the raw store directly, blurring the
+  raw/mart boundary and risking lock contention with the TUI and dashboard.
 
 ### Option C: Streaming Parquet segment writer
 
-- Buffer messages in memory, flush as Parquet row groups/files periodically.
-- **Crash safety:** weakest of the three — Parquet's columnar format isn't
-  meant for single-row streaming appends, so the in-memory buffer since the
-  last flush is unprotected. Would need a separate WAL just to cover that
-  window, at which point you're really running Option A or B underneath it.
-- **Feeds the mart:** best-in-class — DuckDB reads Parquet natively and fast.
-- Good format for the *mart*, weak fit for the *raw durable store*.
+- Buffer messages in memory, flush as Parquet row groups periodically.
+- **Crash safety:** the buffer since the last flush is unprotected, so this
+  needs Option A or B underneath to be durable at all.
+- **Feeds the mart:** best-in-class, since DuckDB reads Parquet natively.
+- A good format for the *mart*, a weak fit for the *raw durable store*.
 
 ### Option D: Hybrid — durable append log + separate mart build
 
-- Use Option A (or B) purely as the durability layer, decoupled from the
-  mart. A separate transform step (batch or periodic) reads completed
-  segments and builds the mart (DuckDB tables and/or Parquet files).
-- Matches the architecture the project description already implies: "save it
-  durably, *then* transform it into a data mart" is two steps, not one.
-- Cleanest separation of concerns: the write path optimizes for
-  safety/throughput, the mart optimizes for query performance, and neither
-  design compromises for the other.
+- Option A or B as the durability layer, with a separate transform step
+  building the mart from completed segments.
+- Matches "save it durably, *then* transform it" as two steps, letting the
+  write path optimize for safety and the mart for query performance.
 
 ### Option E: SQLite (WAL, `synchronous=NORMAL`) raw store + DuckLake mart
 
@@ -106,8 +99,12 @@ the format feeds the downstream mart transform.
   compacted into the mart (SQLite doesn't rotate/segment on its own the way a
   flat-file log does).
 - **Feeds the mart:** DuckDB can `ATTACH` the SQLite file directly (via its
-  SQLite extension) and run SQL transforms straight into DuckLake — the
-  entire raw→mart step can be one SQL script. DuckLake reached v1.0 in April
+  SQLite extension) and run SQL transforms straight into DuckLake. This ADR
+  originally took that to mean the entire raw→mart step would be one SQL
+  script; [ADR-0011](0011-record-validation-and-routing-in-the-mart.md)
+  since put a Python validation and routing stage in the middle, so the
+  transform is a DuckDB read, a Pydantic pass, and a DuckLake write. The
+  `ATTACH` bridge itself is unaffected. DuckLake reached v1.0 in April
   2026 and is described by DuckDB Labs as production-ready with
   backward-compatibility guarantees — see
   [DuckLake v1.0 announcement](https://ducklake.select/2026/04/13/ducklake-10/).
@@ -120,8 +117,8 @@ the format feeds the downstream mart transform.
   a DuckDB catalog is most feature-complete but single-client only; Postgres
   is the only catalog DuckLake calls "production-grade with full
   parallelism" but is an external service; SQLite supports multiple local
-  processes via a retry-timeout mechanism, at the cost of some DuckLake
-  features (e.g. data inlining) and without Postgres's full parallelism.
+  processes via a retry-timeout mechanism, without Postgres's full
+  parallelism.
   `sup` needs the mart-transform writer, the operational TUI, and the
   analytics dashboard to all touch the catalog — three concurrent local
   processes with no appetite for an external service — which rules out a
@@ -145,8 +142,10 @@ with the following resolved sub-decisions:
   messages or every X ms, whichever comes first. Bounds both memory (count
   limit) and latency (time limit) regardless of traffic pattern.
 - **Retention:** raw rows are pruned from SQLite only after the corresponding
-  DuckLake write is verified committed. SQLite is not kept as a permanent
-  archive; DuckLake is the long-term store.
+  DuckLake write is verified committed.
+  [ADR-0012](0012-rolling-retention-window.md) supersedes the rest of this
+  sub-decision: both stores are rolling windows on the retention floor, so
+  neither is a long-term archive.
 - **Incremental mart builds:** a monotonic watermark column plus a small
   state table tracks the last-processed point, so the transform reads
   `WHERE > watermark` instead of reprocessing or duplicating on every run.
@@ -176,23 +175,42 @@ Parquet."
 - The watermark state table is new state that must itself be correct and
   durable; if it's wrong, the mart silently drifts (missed or duplicated
   rows) rather than failing loudly.
-- Using SQLite as the DuckLake catalog means giving up some DuckLake
-  features (e.g. data inlining) and "full parallelism" in exchange for
-  staying dependency-free per ADR-0003. Worth revisiting only if a future
-  need genuinely requires Postgres-level catalog concurrency.
-- The entire raw→mart transform being expressible as one SQL script (SQLite
-  attach → transform → DuckLake write) is a real portfolio strength worth
-  highlighting in the eventual README/demo — it's an unusually legible
-  pipeline for a stranger to read end-to-end.
-- Cross-process SQLite/DuckDB concurrency safety is an **accepted open
-  risk**, not a resolved question — it wasn't spiked ahead of time by
-  design. This is flagged explicitly here and in TODO.md's M2 acceptance
-  criteria so that if it surfaces as a problem, it's recognized as the known
-  risk it is rather than a surprising new bug, and doesn't get silently
-  routed around without reconsidering the architecture.
-- The hand-rolled surface of the project (per ADR-0001) now rests entirely on
-  the Jetstream client itself, since durability and the mart both lean on
-  libraries. That's a fine tradeoff given the client is nontrivial on its
-  own (protocol handling, reconnect/cursor logic, backpressure into the
-  batched writer), but it's worth being aware the "hand-rolled" identity is
-  now narrower than ADR-0001 originally sketched.
+- A SQLite catalog trades DuckLake's "full parallelism" for staying
+  dependency-free per ADR-0003. Data inlining stays available: 20,000 rows
+  written in 10-row transactions produced zero Parquet files and a
+  `ducklake_inlined_data_1_1` table holding all of them in the catalog.
+  Revisit only if something needs Postgres-level catalog concurrency.
+- The raw→mart transform runs as a SQL read, a Pydantic validation and
+  routing stage, then a DuckLake write
+  ([ADR-0011](0011-record-validation-and-routing-in-the-mart.md)). The
+  pipeline stays legible end-to-end through the record models rather than
+  through a single query.
+- **Measured against the alternatives**, 2M real rows at the writer's
+  10,000-row batch size:
+
+  | Backend | rows/s | Concurrent read | Survives `SIGKILL` |
+  |---|---|---|---|
+  | Arrow IPC | 870,556 | yes | yes |
+  | Parquet | 557,298 | no | no — lost all 17.16M rows |
+  | SQLite | 268,607 | yes | yes |
+  | DuckLake | 248,346 | yes | yes |
+  | DuckDB single-file | 101,790 | no — exclusive lock | yes |
+
+  A Parquet file stays unreadable until its footer lands, and DuckDB's
+  single-file format locks out the TUI and mart. DuckLake's cost tracks
+  commit frequency: at the 10-row batches the live tail produces it reaches
+  460 rows/s against SQLite's 110,940, accruing a snapshot per flush. The
+  split holds as chosen — SQLite for small frequent commits, DuckLake for
+  large periodic ones.
+- The raw store's connection carries a 5-second `busy_timeout` from
+  `sqlite3.connect`'s default. A contended write waits for it, the first
+  defence for the risk below. An explicit `timeout` argument would replace
+  it.
+- Cross-process SQLite/DuckDB concurrency is an **accepted open risk**,
+  deliberately left unspiked. Flagged here and in TODO.md's M2 acceptance
+  criteria so it is recognised on arrival rather than routed around.
+- The project's hand-rolled surface (ADR-0001) is now the Jetstream client
+  alone, since durability and the mart lean on libraries. The client carries
+  enough on its own — protocol handling, reconnect and cursor logic,
+  backpressure into the batched writer — with the hand-rolled identity
+  narrower than ADR-0001 sketched.
