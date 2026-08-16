@@ -88,11 +88,6 @@ documented `uv` command, with no manual steps.
       and exits 1, so the orchestrator can tell a refusal from a healthy
       start ([ADR-0007](adr/0007-control-plane-ipc.md),
       [ADR-0006](adr/0006-cli-orchestration-model.md))
-- [ ] Retention: ingest prunes `events` below the position transform
-      publishes ([ADR-0013](adr/0013-service-owned-pruning.md)). Lands with
-      M2; until then rows accumulate at ~21 GB/day
-- [ ] Prune `gap_index` on the retention floor — the durable coverage record
-      once `events` is a buffer, growing ~400 MB/day unpruned
 
 **Acceptance**
 
@@ -162,6 +157,11 @@ Untested:
       (ADR-0014)
 - [ ] Watermark column + state table for incremental runs
 - [ ] Publish the committed position where ingest can read it (ADR-0013)
+- [ ] Ingest prunes `events` below that position, holding a working buffer
+      rather than a window (ADR-0013). Until it lands the raw store
+      accumulates at ~21 GB/day
+- [ ] Prune `gap_index` on the retention floor — the durable coverage record
+      once `events` is a buffer, growing ~400 MB/day unpruned (ADR-0013)
 - [ ] Purge mart rows past the retention floor
       ([ADR-0012](adr/0012-rolling-retention-window.md)): `DELETE`,
       `ducklake_expire_snapshots`, `ducklake_cleanup_old_files`, on a schedule
