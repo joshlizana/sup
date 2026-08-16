@@ -86,10 +86,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   intermittently, and `quick_check` returns `ok` throughout.
 - A clean 24-hour run reached 99.93% second-level coverage with zero gaps
   over 10 seconds, meeting M1's acceptance criterion on live data.
-- Duplicate share measured at 46.19% of 48,034,622 rows, against the 0.5%
-  shard overlap predicts. Cause identified in ADR-0020.
-- Live volume: 22.9M distinct events and ~37.4 GB of raw store per 24 hours.
-  Earlier figures extrapolated from a 39.5%-covered window and were low.
+- Live volume: ~27M events and ~21 GB of raw store per 24 hours, at 780
+  bytes per row. Earlier figures counted a store inflated by the duplicate
+  defect and were high on rows, low on distinct events.
 - TDD-0003 §6 and TODO.md had the TUI summing `Reader.update_throughput()`
   across `Ingester.readers`, which ADR-0006 made unreachable by putting
   ingest in a subprocess. `Ingester` now sums them into its `status` reply.
@@ -104,6 +103,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- The 46.19% duplicate share, caused by the live tail replaying against
+  endpoints that clamp recent cursors and by `current_cursor` regressing to
+  the clamped position (ADR-0020). A run afterwards measured 0.56% over
+  27,048,844 rows — flat across every pk region, 0.00% in the region the
+  live tail wrote, and matching the 0.556% shard overlap alone predicts.
+  99.44% of identities appear once and two rows in 27 million appear more
+  than twice.
 - `bulk_insert` rolls back before re-raising, making a batch atomic on the
   failure path. A partial `executemany` previously left its earlier rows in
   an open transaction for the next flush to commit.

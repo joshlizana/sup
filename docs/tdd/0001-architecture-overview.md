@@ -141,9 +141,10 @@ handful of focused views, with queries wrapped in `@st.cache_data`.
 - **Resolved:** cross-process reads work while ingest writes, provided the
   reader stays behind the write frontier
   ([ADR-0002](../adr/0002-raw-ingestion-durability.md)).
-- **Resolved:** the 46.19% duplicate share is the live tail replaying against
-  endpoints that clamp recent cursors
-  ([ADR-0020](../adr/0020-live-tail-cursor-clamping.md)).
+- **Resolved:** the 46.19% duplicate share was the live tail replaying against
+  endpoints that clamp recent cursors. Defended in
+  [ADR-0020](../adr/0020-live-tail-cursor-clamping.md) and measured at 0.56%
+  afterwards, which is the shard overlap and nothing more.
 - **Resolved:** each service records its own discards. Ingest's DLQ stays in
   the raw store; validation rejects land in a mart-side reject table.
 - **Resolved:** the raw-table schema is `src/sup/boostrap.py`.

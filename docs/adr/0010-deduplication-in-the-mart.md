@@ -103,11 +103,15 @@ Accepted costs:
   99 ms for ordinary inter-event spacing — below the gap detector's floor, so
   the range is never re-fetched. M1 asks for a bounded, documented loss
   window; this is it.
-- **The measured duplicate rate ran far above 0.5%** — 46.19% of 48,034,622
-  rows on a full run. The cause is the live tail replaying against endpoints
-  that clamp recent cursors, not overlap or network re-delivery
-  ([ADR-0020](0020-live-tail-cursor-clamping.md)). With that fixed the rate
-  this ADR reasons about stands.
+- **The overlap rate is confirmed at 0.56%**, measured over 27,048,844 rows
+  across 24.24 hours once the live tail stopped replaying clamped ranges
+  ([ADR-0020](0020-live-tail-cursor-clamping.md)). It is the overlap and
+  nothing else: 99.44% of identities appear once, 0.560% appear exactly
+  twice, and two rows in 27 million appear more often than that. Shards
+  advance by thirty minutes plus ten seconds while each is widened ten
+  seconds at its leading edge, so consecutive shards overlap by ten seconds
+  — 480 s of double coverage in 86,400, or 0.556% predicted against 0.557%
+  observed.
 - Reverting is cheap: rebuilding the unique index over an existing table is a
   ~3 s sort, restorable offline.
 - Revisit trigger: if the transform's deduplication step becomes the new

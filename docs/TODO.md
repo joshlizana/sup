@@ -83,9 +83,9 @@ documented `uv` command, with no manual steps.
       catch-up
 - [ ] Retention: ingest prunes `events` below the position transform
       publishes ([ADR-0013](adr/0013-service-owned-pruning.md)). Lands with
-      M2; until then rows accumulate at ~37.4 GB/day
+      M2; until then rows accumulate at ~21 GB/day
 - [ ] Prune `gap_index` on the retention floor — the durable coverage record
-      once `events` is a buffer, growing ~730 MB/day unpruned
+      once `events` is a buffer, growing ~400 MB/day unpruned
 
 **Acceptance:** run for an extended period, `kill -9` mid-stream, restart, and
 confirm no corruption and a bounded loss window. A clean run reached 99.93%

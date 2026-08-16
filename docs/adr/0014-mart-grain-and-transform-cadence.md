@@ -13,7 +13,7 @@ Accepted
 - **One row per event.** Per-collection tables holding every validated
   record, deduped on `(did, rkey, rev)`, with the dashboard aggregating at
   read time. Content analysis becomes a query change rather than a re-model,
-  and there is one transform stage and one watermark. Costs ~22.9M rows/day
+  and there is one transform stage and one watermark. Costs ~27M rows/day
   and read-time aggregation for every view. Chosen.
 - **Events plus derived rollups.** Per-event tables plus rollup tables for
   the dashboard: the fastest queries with the content path intact, at two
@@ -38,7 +38,7 @@ batch.
 The dashboard is scoped to volume and rhythm for the thin slice — activity
 per collection over time — with content analysis as the full product, so the
 mart has to serve the first without foreclosing the second. A 24-hour window
-is ~22.9M rows spread across five tables, which DuckDB aggregates comfortably
+is ~27M rows spread across five tables, which DuckDB aggregates comfortably
 for the handful of focused views
 [ADR-0005](0005-analytics-dashboard-framework.md) scopes the dashboard to.
 The second stage stays available for when a view needs it.
