@@ -79,6 +79,11 @@ bounded read succeeding under 35k rows/s, 200x the rate that fails here. The
 450x time difference points at the scanner reading far more of the file than
 a rowid range needs.
 
+Ingest's own gap audit is the exception that proves the rule: it attaches
+`raw.db` through DuckDB to mirror `(pk, time_us)` into `gap_index`, and it is
+safe because it completes before any reader starts, so nothing is writing
+while it scans.
+
 **So the transform reads through SQLite**, which costs nothing it was not
 already paying. The rows have to be materialized regardless — Pydantic
 validates them row by row and routes them into per-collection arrays
