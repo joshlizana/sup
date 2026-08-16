@@ -12,29 +12,31 @@ fail.
 
 from sup.config import Config
 from sup.util import register, displayTime
-from sup.db import DuckDBClient
+from sup.db import DuckDBClient, SQLiteClient
 from sup.services.ingest.jetstream import JetstreamClient
 import logging
 import asyncio
+import pyarrow
 import time
 import sys
 
 
 # Gap detection runs in DuckDB against `gap_index`, a mirror of
-# (pk, time_us) from the raw SQLite store reached through an ATTACH. Each
-# run copies forward from the highest pk already mirrored.
+# (pk, time_us) read from the raw store through SQLite and inserted
+# columnar. Each run copies forward from the highest pk already mirrored,
+# so the read is a rowid seek and finds nothing when ingest has not moved
+# (ADR-0002).
 TEN_SECONDS = 10_000_000
-ATTACH_SQLITE_SQL = f"ATTACH DATABASE '{Config().data_path}/raw.db' AS raw (TYPE sqlite)"
-UPDATE_INDEX_SQL = """INSERT OR REPLACE INTO gap_index (pk, time_us) 
-                    SELECT pk, time_us FROM raw.events 
-                    WHERE pk > (SELECT COALESCE(MAX(pk), 0) FROM gap_index)"""
+GET_MAX_PK_SQL = "SELECT COALESCE(MAX(pk), 0) FROM gap_index"
+GET_NEW_INDEX_SQL = "SELECT pk, time_us FROM events WHERE pk > ? ORDER BY pk"
+UPDATE_INDEX_SQL = "INSERT OR REPLACE INTO gap_index (pk, time_us) FROM tbl"
 GAP_SCAN_SQL = f"""WITH SortedGaps as (
                 SELECT LAG(time_us) OVER (ORDER BY time_us, pk) as prev_time_us, time_us 
                 FROM gap_index
                 WHERE time_us >= ?)
                 SELECT prev_time_us, time_us FROM SortedGaps
                 WHERE (time_us - prev_time_us) > {TEN_SECONDS} 
-                ORDER BY prev_time_us"""  # finds gaps over 10s long
+                ORDER BY prev_time_us""" 
 EARLIEST_CURSOR_SQL = "SELECT COALESCE(MIN(time_us), 0) FROM gap_index WHERE time_us >= ?"
 LATEST_CURSOR_SQL = "SELECT COALESCE(MAX(time_us), 0) FROM gap_index WHERE time_us >= ?"
 
@@ -42,21 +44,24 @@ class GapAuditor:
     def __init__(self):
         self.NOW: int = int(time.time() * 1_000_000)
         self.duckdb_client: DuckDBClient | None = None
+        self.sqlite_client: SQLiteClient | None = None
         self.endpoints: list[str] = Config().endpoints
         self.retention_floor: int | None = Config().retention
         self.gaps: list[tuple[int, int]] = []
         self.log: logging.Logger = register(logging.getLogger(__name__), self.__class__.__name__)
 
     async def __aenter__(self):
-        """Open the index database and attach the raw store, exposing
-        SQLite's `events` table to DuckDB as `raw.events`."""
+        """Open both stores: the DuckDB index the scan runs against, and
+        the raw store the mirror reads from."""
         self.duckdb_client = DuckDBClient("index.db")
+        self.sqlite_client = SQLiteClient("raw.db")
         await self.duckdb_client.__aenter__()
-        await self.duckdb_client.conn.execute(ATTACH_SQLITE_SQL)
+        await self.sqlite_client.__aenter__()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.duckdb_client.__aexit__(exc_type, exc_val, exc_tb)
+        await self.sqlite_client.__aexit__(exc_type, exc_val, exc_tb)
 
     async def run(self):
         """Return the sharded ranges for the ingest workers to claim.
@@ -107,9 +112,23 @@ class GapAuditor:
             return None
 
     async def _update_index(self):
-        """Copy events newer than the index's high-water mark into it."""
+        """Copy events newer than the index's high-water mark into it.
+
+        Reads in chunks and inserts each before reading the next, so
+        neither the row list nor the Arrow table grows with the backlog.
+        Each chunk commits on its own, so a mirror interrupted partway
+        keeps what it wrote and the next run resumes above it — which
+        holds because the rows arrive in `pk` order.
+        """
         try:
-            await self.duckdb_client.conn.execute(UPDATE_INDEX_SQL)
+            max_pk = (await self.duckdb_client.fetchone(GET_MAX_PK_SQL))[0]
+            async with self.sqlite_client.conn.execute(GET_NEW_INDEX_SQL, (max_pk,)) as cursor:
+                while chunk := await cursor.fetchmany(100_000):
+                    pk, time_us = zip(*chunk)
+                    tbl = pyarrow.Table.from_arrays([pyarrow.array(pk), pyarrow.array(time_us)], names=["pk", "time_us"])
+                    await self.duckdb_client.conn.register("tbl", tbl)
+                    await self.duckdb_client.conn.execute(UPDATE_INDEX_SQL)
+
         except Exception as e:
             self.log.error(f"Error updating index: {e}")
             raise

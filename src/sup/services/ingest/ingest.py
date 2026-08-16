@@ -19,7 +19,7 @@ class Ingester:
     def __init__(self):
         self.running: bool = True
         self.paused: bool = False
-        self.controller: Controller = Controller("ingest", self.quiesce, self.resume, self.shutdown, self.return_status)
+        self.controller: Controller = Controller("ingest", self._quiesce, self._resume, self._shutdown, self._return_status)
         self.auditor: GapAuditor = GapAuditor()
         self.readers: list[Reader] = []
         self.reader_tasks: list[asyncio.Task] = []
@@ -90,11 +90,11 @@ class Ingester:
 
             await asyncio.sleep(0.1)
 
-        await self.drain()
+        await self._drain()
         self.log.info("Service shutdown complete")
 
 
-    async def return_status(self):
+    async def _return_status(self):
         """Return the service's current status as a dict (ADR-0015).
 
         `Controller` runs each connection handler on the loop that owns
@@ -115,15 +115,15 @@ class Ingester:
         }
 
 
-    async def quiesce(self):
+    async def _quiesce(self):
         """Drain the workers and mark the run paused. The lock and control
         socket stay held."""
         self.log.info("Received pause command")
-        await self.drain()
+        await self._drain()
         self.paused = True
         self.log.info("Service paused")
 
-    async def resume(self):
+    async def _resume(self):
         """Start a fresh generation of worker tasks and clear the paused
         flag. Returns immediately when the run is already active."""
         self.log.info("Received resume command")
@@ -144,13 +144,13 @@ class Ingester:
 
         self.paused = False
         self.log.info("Service resumed")
-    async def shutdown(self):
+    async def _shutdown(self):
         """Stop ingesting and end the run loop."""
         self.log.info("Received shutdown command")
-        await self.drain()
+        await self._drain()
         self.running = False
 
-    async def drain(self):
+    async def _drain(self):
         """Stop the current generation of workers with both queues emptied.
 
         Stops the readers and awaits them to completion, each re-enqueueing

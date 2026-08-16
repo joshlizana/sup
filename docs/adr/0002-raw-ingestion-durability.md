@@ -26,7 +26,7 @@ written by a batched writer that commits every N messages or X ms, whichever
 comes first. The mart is DuckLake, its catalog a SQLite database in a
 separate file. The transform reads the raw store through `aiosqlite`,
 `WHERE pk > watermark` against a monotonic watermark column and a small state
-table, and writes out through DuckLake, never reaching the raw store through
+table, and writes out through DuckLake. Nothing reads the raw store through
 DuckDB.
 
 Retention is [ADR-0012](0012-rolling-retention-window.md) and
@@ -80,14 +80,14 @@ bounded read succeeding under 35k rows/s, 200x the rate that fails here. The
 450x time difference points at the scanner reading far more of the file than
 a rowid range needs.
 
-Ingest's gap audit does attach `raw.db` through DuckDB, to mirror
-`(pk, time_us)` into `gap_index`. It runs to completion before any reader
-starts, so nothing is writing while it scans — the ordering is what makes it
-safe, not the reader. It pays the scanner's cost regardless: finding the
-rows above the last mirrored `pk` takes 4 to 7.5 s against a 22 GB store
-**even when there are none**, where `sqlite3` answers the same predicate in
-under a millisecond off the rowid index. That, not the gap scan, is what
-dominates a startup audit.
+The gap audit reads the same way, for the same reason. Finding the rows
+above the last mirrored `pk` took 4 to 7.5 s through the scanner against a
+22 GB store **even when there were none**, where SQLite answers off the rowid
+index in under a millisecond; it reads through `aiosqlite` and inserts into
+`gap_index` as Arrow chunks, which took the audit's data phase from 7.7 s to
+about 1 s. A cold 29M-row mirror costs ~40 s that way against ~22 s in the
+engine, paid once on a fresh store that is about to spend ten minutes
+backfilling.
 
 **So the transform reads through SQLite**, which costs nothing it was not
 already paying. The rows have to be materialized regardless — Pydantic

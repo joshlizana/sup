@@ -66,7 +66,7 @@ class SQLiteClient:
 
 class DuckDBClient:
     """Connection to the DuckDB gap index, used by `GapAuditor` for the
-    windowed gap scan and for `ATTACH`ing the raw SQLite store."""
+    windowed gap scan."""
 
     def __init__(self, db):
         self.data_path = Config().data_path / db
