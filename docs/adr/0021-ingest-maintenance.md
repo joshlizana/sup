@@ -17,9 +17,9 @@ Accepted
 - **A second connection to the raw store.** Simple and independent, but
   SQLite's write lock is per database, so the prune and the writer contend.
   `bulk_insert` retries three times against a 5-second `busy_timeout` and
-  then drops the batch, which is
-  [ADR-0010](0010-deduplication-in-the-mart.md)'s documented loss window
-  firing for something that is not a fault.
+  then drops the batch, spending
+  [ADR-0010](0010-deduplication-in-the-mart.md)'s documented loss window on
+  lock contention.
 - **Share the writer's connection, run between flushes.** One connection,
   nothing to contend for, and no pause. Chosen.
 
@@ -47,14 +47,11 @@ catch-up.
 
 ## Why
 
-One connection makes ADR-0013's "one writer per store" literal rather than a
-convention, and there is no lock for the prune and the writer to contend
-for. When a pass does take time, the bounded queues absorb it and the
-readers suspend on a full `put()`
-([ADR-0009](0009-bounded-write-queues.md)) — backpressure rather than a
-dropped batch.
+One connection satisfies ADR-0013's "one writer per store" exactly, and
+leaves no lock for the prune and the writer to contend for. A pass that
+takes time fills the bounded queues and suspends the readers on `put()`
+([ADR-0009](0009-bounded-write-queues.md)).
 
-Running between flushes is what makes one transaction per method true.
 `bulk_insert` is an `executemany` followed by a `commit`, so a concurrent
 prune could land between them, and a rollback on either side would discard
 the other's uncommitted work — for the writer, events already taken off the
