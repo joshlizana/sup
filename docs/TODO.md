@@ -77,11 +77,6 @@ documented `uv` command, with no manual steps.
       DIDs on a 27M-row store decode outside 2022 to now from well-formed
       TIDs. `tid_us` returns 0 for those, and the health probe reads past
       them ([ADR-0018](adr/0018-event-time-from-commit-rev.md))
-- [ ] Decide what the mart does with a zero `tid_us`: fall back to `time_us`,
-      reject the row, or carry a null event time. 0 reads as 1970 to anything
-      treating it as a timestamp, and a retention-keyed purge would delete
-      those rows on the first cycle
-      ([ADR-0012](adr/0012-rolling-retention-window.md))
 - [ ] `status` command on ingest's `Controller`: rate, connection state, queue
       depth, worker count ([ADR-0015](adr/0015-tui-as-control-plane-client.md))
 - [x] Re-measure throughput as distinct events per second. With duplicates at
@@ -128,7 +123,6 @@ Demonstrated:
       the `flock` anyway and clears them (ADR-0007)
 - [x] SIGTERM drains readers before the writer, then releases the listener and
       removes the socket ([TDD-0002](tdd/0002-cli-orchestration.md) §6)
-
 - [x] The DLQ takes a row when one fails to parse, seen on an earlier run. It
       stays empty on a healthy one, so its rate is an instrument rather than
       a defect count
@@ -158,6 +152,12 @@ Untested:
       ([ADR-0014](adr/0014-mart-grain-and-transform-cadence.md))
 - [ ] Mart-side reject table, keeping each store to a single writer
       ([ADR-0013](adr/0013-service-owned-pruning.md))
+- [ ] Decide what the mart does with a zero `tid_us`: fall back to `time_us`,
+      reject the row, or carry a null event time. 0 reads as 1970 to anything
+      treating it as a timestamp, and a retention-keyed purge would delete
+      those rows on the first cycle
+      ([ADR-0018](adr/0018-event-time-from-commit-rev.md),
+      [ADR-0012](adr/0012-rolling-retention-window.md))
 - [ ] Cycle trigger at ~15,000 unconsumed rows, taking everything available
       (ADR-0014)
 - [ ] Watermark column + state table for incremental runs
@@ -172,10 +172,10 @@ Untested:
 - [ ] `status` command reporting the committed watermark (ADR-0015)
 
 **Acceptance:** delete the mart, rebuild from the raw store, get the same
-result. Settle the read path first: DuckDB attaching the raw store fails
-intermittently with `database disk image is malformed` while ingest writes,
-at any watermark distance, where SQLite's own connection does not
-(ADR-0002).
+result, with the transform running while ingest writes. The read stays on
+`aiosqlite`: DuckDB attaching the raw store fails intermittently with
+`database disk image is malformed` at any watermark distance, where SQLite's
+own connection does not (ADR-0002).
 
 ## M3: Minimal operational TUI
 
