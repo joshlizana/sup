@@ -48,13 +48,18 @@ tracks the record's own `rkey` closely where both are present.
 
 Accepted costs:
 
-- **A plausibility guard is required.** 112,944 rows — 0.2351% — decode to
-  timestamps outside 2020–2030, clustering near the epoch. Every one carries
-  a well-formed 13-character `rev`, and consecutive values increment by one
-  microsecond, so some PDS implementations mint `rev` as a counter rather
-  than a clock. The decode cannot detect this; only a range check can. Rows
-  failing it need a documented fallback or exclusion rather than a 1970
-  bucket.
+- **A plausibility guard is required.** 0.2351% of rows decode to timestamps
+  outside 2020-2030, clustering near the epoch — 71,843 rows across 8,474
+  distinct DIDs on a later 27M-row store, so it is a class of client
+  implementation rather than a few accounts. Every one carries a well-formed
+  13-character `rev`, and values run consecutively across a sub-second span,
+  so those implementations mint `rev` as a counter rather than a clock. The
+  decode cannot detect this; only a range check can.
+- **The guard has a live consumer before the mart.**
+  [ADR-0019](0019-endpoint-witness-lag-screening.md)'s probe compares a
+  message's `time_us` against `tid_us(rev)`, so a probe landing on a
+  counter-minted `rev` misses the threshold by nine orders of magnitude and
+  benches a healthy endpoint for the run.
 - **`tid_us` is on the write path for every row.** A `rev` outside the
   alphabet raises inside `process_message`'s `try`, which sends an otherwise
   valid message to the DLQ. All 48,034,622 rows measured carry exactly 13

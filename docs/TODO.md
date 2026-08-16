@@ -74,8 +74,11 @@ documented `uv` command, with no manual steps.
       seconds, measured during the retention probe they already run
       ([ADR-0019](adr/0019-endpoint-witness-lag-screening.md))
 - [ ] Guard `tid_us` against implausible values — 0.2351% of rows decode
-      outside 2020–2030 from well-formed TIDs
-      ([ADR-0018](adr/0018-event-time-from-commit-rev.md))
+      outside 2020-2030 from well-formed TIDs, 71,843 rows across 8,474 DIDs
+      on a 27M-row store ([ADR-0018](adr/0018-event-time-from-commit-rev.md)).
+      Wanted before the mart uses it as a time axis, and already reachable
+      through ADR-0019's health probe, which benches an endpoint when its
+      probe message carries one
 - [ ] `status` command on ingest's `Controller`: rate, connection state, queue
       depth, worker count ([ADR-0015](adr/0015-tui-as-control-plane-client.md))
 - [x] Re-measure throughput as distinct events per second. With duplicates at
