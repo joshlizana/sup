@@ -16,7 +16,6 @@ import orjson
 import asyncio
 import logging
 from collections import deque
-from sup.config import Config
 from sup.util import register, displayTime, tid_us
 from sup.services.ingest.jetstream import JetstreamClient
 
