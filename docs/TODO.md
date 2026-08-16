@@ -17,7 +17,7 @@ learning value.
 **Acceptance:** a clean checkout installs and produces `sup --help` via the
 documented `uv` command, with no manual steps.
 
-## M1: Minimal ingest + durable raw store
+## M1: Minimal ingest + durable raw store ✅
 
 - [x] Shared data directory: `Config` exposes `data_path` and `control_path`
       as computed sub-paths of one `platformdirs` root
@@ -124,11 +124,9 @@ Demonstrated:
       stays empty on a healthy one, so its rate is an instrument rather than
       a defect count
       ([ADR-0011](adr/0011-record-validation-and-routing-in-the-mart.md))
-
-Untested:
-
-- [ ] An unreachable endpoint backs off rather than reconnecting in a loop.
-      Every run so far has had all six endpoints up
+- [x] An unreachable endpoint backs off rather than reconnecting in a loop:
+      12 connection attempts in 45 s, one probe cycle per 15 s, with the
+      claimable range left in the queue for another Reader
 
 ## M2: Minimal mart transform
 
