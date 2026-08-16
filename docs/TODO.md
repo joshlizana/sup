@@ -127,10 +127,9 @@ Untested:
 
 - [ ] An unreachable endpoint backs off rather than reconnecting in a loop.
       Every run so far has had all six endpoints up
-- [ ] The DLQ receives a row. It has stayed empty on every run, so the path
-      is unexercised rather than proven
-      ([ADR-0011](adr/0011-record-validation-and-routing-in-the-mart.md) makes
-      the same point about the mart's reject path)
+- [x] The DLQ receives a row, on an earlier run. It stays empty on a healthy
+      one, so its rate is an instrument rather than a defect count
+      ([ADR-0011](adr/0011-record-validation-and-routing-in-the-mart.md))
 
 ## M2: Minimal mart transform
 
@@ -164,9 +163,10 @@ Untested:
 - [ ] `status` command reporting the committed watermark (ADR-0015)
 
 **Acceptance:** delete the mart, rebuild from the raw store, get the same
-result. Keep the transform's read bounded by the watermark rather than
-scanning to `max(pk)` — reads succeed while ingest writes only behind the
-write frontier (ADR-0002).
+result. Settle the read path first: DuckDB attaching the raw store fails
+intermittently with `database disk image is malformed` while ingest writes,
+at any watermark distance, where SQLite's own connection does not
+(ADR-0002).
 
 ## M3: Minimal operational TUI
 

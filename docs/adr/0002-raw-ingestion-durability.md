@@ -61,16 +61,28 @@ loss or an OS crash — a documented SQLite tradeoff
 M1's `kill -9` criterion and claims nothing stronger, and skipping
 fsync-per-commit is what makes the rate viable at all.
 
-Concurrent reads work behind a watermark and fail at the write frontier.
-Against a live 33.1M-row store under 35k rows/s, a scan to `max(pk)` fails
-intermittently with `database disk image is malformed`, while the same scan
-bounded to `pk <= max(pk) - 100,000` succeeded 3/3. `PRAGMA quick_check`
-returns `ok` while ingest continues, so the store is intact and the error is
-a read artifact of WAL checkpointing. Connection mode is not the factor —
-`mode=ro`, `mode=rw` with `query_only=1`, and DuckDB's `sqlite_scanner` at
-one and two threads all fail the same way. The transform already reads behind
-a watermark ([ADR-0014](0014-mart-grain-and-transform-cadence.md)), so this
-is a constraint the design satisfies.
+**Concurrent reads fail through DuckDB and succeed through SQLite**, and the
+reader is the variable rather than the distance behind the writer. The same
+bounded batch, `pk > lo AND pk <= max(pk) - lag`, run five times each against
+a 21 GB store while ingest wrote at 169 rows/s:
+
+| reader | lag 100k | lag 1M | `MAX(pk)` probe | time |
+|---|---|---|---|---|
+| `sqlite3`, `mode=ro` | 5/5 | 5/5 | 10/10 | 0.02 s |
+| DuckDB `sqlite_scanner` | 1/5 | 4/5 | 2/5 | ~9 s |
+
+Failures are `database disk image is malformed`, and `PRAGMA quick_check`
+returns `ok` afterwards, so the store is intact and the error is a read
+artifact of WAL checkpointing. Lag reduces DuckDB's failure rate without
+removing it. Write pressure is not the driver: an earlier run measured the
+bounded read succeeding under 35k rows/s, 200x the rate that fails here. The
+450x time difference points at the scanner reading far more of the file than
+a rowid range needs.
+
+**This leaves the mart's read path unresolved.** The transform as designed
+has DuckDB attach the raw store, which is the failing side of that table, and
+[ADR-0014](0014-mart-grain-and-transform-cadence.md)'s watermark bound
+reduces the failure rate rather than eliminating it.
 
 The catalog is SQLite because DuckLake needs one and the alternatives do not
 fit: DuckDB is single-client, and Postgres, the only backend with full

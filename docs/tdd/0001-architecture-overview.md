@@ -138,9 +138,11 @@ handful of focused views, with queries wrapped in `@st.cache_data`.
   ([ADR-0014](../adr/0014-mart-grain-and-transform-cadence.md)).
 - Orchestration remains proposed rather than built
   ([TDD-0002](0002-cli-orchestration.md)).
-- **Resolved:** cross-process reads work while ingest writes, provided the
-  reader stays behind the write frontier
-  ([ADR-0002](../adr/0002-raw-ingestion-durability.md)).
+- **Open:** cross-process reads while ingest writes succeed through SQLite's
+  own connection and fail intermittently through DuckDB's `sqlite_scanner`,
+  at any distance behind the writer
+  ([ADR-0002](../adr/0002-raw-ingestion-durability.md)). The mart's read path
+  goes through DuckDB.
 - **Resolved:** the 46.19% duplicate share was the live tail replaying against
   endpoints that clamp recent cursors. Defended in
   [ADR-0020](../adr/0020-live-tail-cursor-clamping.md) and measured at 0.56%

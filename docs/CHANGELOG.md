@@ -80,10 +80,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Arrow IPC and Parquet on 2M real rows. DuckDB's single-file format locks
   out concurrent readers; raw Parquet lost all 17.16M rows on `SIGKILL`;
   DuckLake falls to 460 rows/s at live-tail batch sizes.
-- Cross-process concurrency resolved from open risk to a constraint the
-  watermark already satisfies: reads bounded behind the write frontier
-  succeed 3/3 under 35k rows/s, reads reaching `max(pk)` fail
-  intermittently, and `quick_check` returns `ok` throughout.
+- Cross-process concurrency narrowed to the reader: SQLite's own connection
+  reads a bounded batch 5/5 while ingest writes, DuckDB's `sqlite_scanner`
+  1/5 at a 100k lag and 4/5 at 1M, and `quick_check` returns `ok`
+  throughout. The mart's read path goes through DuckDB, so the risk is open.
 - A clean 24-hour run reached 99.93% second-level coverage with zero gaps
   over 10 seconds, meeting M1's acceptance criterion on live data.
 - Live volume: ~27M events and ~21 GB of raw store per 24 hours, at 780
