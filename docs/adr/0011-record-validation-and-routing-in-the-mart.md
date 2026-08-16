@@ -4,32 +4,62 @@
 
 Accepted
 
-## Context
+## Options considered
 
-[ADR-0010](0010-deduplication-in-the-mart.md) removed Pydantic validation
-from the ingest path and assigned it to the M2 transform, but left the
-implementation open. `models.py` already describes the Jetstream message
-shape — a `BlueskyMessage` with a `Commit`, whose `record` is a
-discriminated union with one model per collection in the client's
-`wantedCollections` filter.
+- **Express the validation in SQL.** Port each model's checks to DuckDB JSON
+  predicates and emit a `validation` column alongside the extracted fields.
+  1.9x faster, and the data never leaves the engine, so the transform stays
+  one `CREATE TABLE ... AS SELECT`; it reads `$.commit.record.$type` by
+  explicit path, so a record carrying a bare `type` key cannot confuse it.
+  But routing becomes a `CASE` or filtered inserts rather than a typed
+  branch, per-collection column lists live in SQL text, and `models.py` would
+  describe a shape nothing enforces. Verified across twelve injected failure
+  cases.
+- **Validate with Pydantic in the transform.** Read rows out, validate
+  through `BlueskyMessage`, write typed results back. The union yields a
+  typed record per row, so column extraction follows from the matched model
+  rather than a hand-maintained SQL branch, and `models.py` becomes the
+  single declaration of record shape. Rows leave the engine and return, at
+  roughly half the throughput. Chosen.
+- **Move validation back to ingest.** Rejected on measurement by
+  [ADR-0010](0010-deduplication-in-the-mart.md): ingest-time validation was
+  part of what held the writer at 17.5k rows/s.
 
-Two things forced the question. First, the mart writes one table per
-collection, so something has to decide which table a row belongs to and
-which columns to extract for it. Second, ADR-0002 accepted a mart transform
-"expressible as one SQL script"; a Python validation stage in the middle
-changes that property, so the choice is worth recording rather than
-absorbing silently.
+## Decision
 
-Measured against the raw store's 5,859,179 rows — a full 24-hour window of
-real traffic — for both candidate implementations:
+**Pydantic, in the M2 transform.** The transform runs as a DuckDB read, a
+Python validation and routing stage, and a DuckLake write.
+
+**Routing keys on `commit.collection`, not the matched model**, because 3.83%
+of rows are deletes carrying no record, so the union yields `None` and cannot
+name their table.
+
+**The discriminator field is named `record_type`, not `type`.** Pydantic
+resolves a discriminated union by field name *or* alias, so a field named
+`type` with `alias="$type"` accepts either key, and record bodies are
+user-controlled. `record_type` leaves `$type` as the only key that can supply
+the tag.
+
+## Why
+
+The mart writes one table per collection, so something has to decide which
+table a row belongs to and which columns to extract — routing into typed
+per-collection tables is what a discriminated union expresses directly.
+Measured against 5,859,179 rows, a full 24-hour window:
 
 | Implementation | Throughput | Wall clock |
 |---|---|---|
 | Validation expressed in DuckDB SQL | 524,040 rows/s | 11.2 s |
 | Pydantic, rows read out and results written back | 271,511 rows/s | 21.6 s |
 
-Both agree on the data: every one of the 5,859,179 rows validates. What the
-same corpus also established is the shape of the work each has to do:
+Both agree on the data: every row validates. SQL's speed is spent on the
+wrong axis — at 271,511 rows/s a 24-hour window validates in 21.6 s, so a
+periodic batch transform is not limited by this, and buying the difference
+back would mean maintaining column lists in SQL while `models.py` describes
+the same shapes without enforcing them.
+
+The same corpus gives the shape of the work, and is why routing cannot key on
+the matched model:
 
 | Operation | Record present | Rows | Share |
 |---|---|---|---|
@@ -37,96 +67,42 @@ same corpus also established is the shape of the work each has to do:
 | `delete` | no | 224,364 | 3.83% |
 | `update` | yes | 789 | 0.01% |
 
-## Options considered
+The `type` naming rule comes from a defect this found: the discriminator
+resolved on a field named `type`, letting a record's own bare `type` key
+choose its model. 6,536 sample rows carry a bare `type` key — 6,535 duplicate
+the correct NSID, and one from a third-party posting library carries a vendor
+string, failing the match on an otherwise valid post.
 
-### Option A: Express the validation in SQL
+Accepted costs:
 
-- Port each model's checks to DuckDB JSON predicates — `json_valid`,
-  `payload ->> '$.commit.rkey' IS NULL`, `TRY_CAST(... AS BIGINT)`,
-  collection membership via `IN`, `json_type` for the `subject` shape — and
-  emit a `validation` column alongside the extracted fields.
-- **Pros:** 1.9x faster, and the data never leaves the engine, so the
-  transform stays a single `CREATE TABLE ... AS SELECT` and ADR-0002's
-  one-SQL-script property survives intact. Reads `$.commit.record.$type`
-  by explicit path, so it cannot be confused by a record that also carries
-  a bare `type` key.
-- **Cons:** routing to per-collection tables becomes a `CASE` or a set of
-  filtered inserts rather than a typed branch, and the per-collection column
-  lists live in SQL text rather than in declared models. Verified working
-  across twelve injected failure cases, but the checks are duplicated
-  knowledge — `models.py` would describe a shape nothing enforces.
-
-### Option B: Validate with Pydantic in the transform
-
-- Read raw rows out of the store, validate each through `BlueskyMessage`,
-  and write typed results back into the mart tables.
-- **Pros:** the discriminated union yields a typed record model per row, so
-  per-collection column extraction follows from the model that matched
-  rather than from a hand-maintained SQL branch. `models.py` becomes the
-  single declaration of record shape, used rather than merely documenting.
-- **Cons:** rows leave the engine and come back, which is the cost ADR-0002's
-  SQL-only framing was avoiding. Roughly half the throughput of Option A.
-
-### Option C: Move validation back to ingest
-
-- Rejected by [ADR-0010](0010-deduplication-in-the-mart.md) on measurement:
-  ingest-time validation was part of what held the writer at 17.5k rows/s.
-  Not reopened here.
-
-## Decision
-
-**Option B — Pydantic, in the M2 transform.**
-
-The deciding factor is that the mart's job is routing into typed
-per-collection tables, and a discriminated union is a direct expression of
-exactly that. Option A is faster, but its speed advantage is spent on the
-wrong axis: at 271,511 rows/s a full 24-hour window validates in 21.6
-seconds, so a periodic batch transform is nowhere near limited by this. The
-round trip is real but affordable, and buying it back would mean maintaining
-the per-collection column lists in SQL while `models.py` describes the same
-shapes without enforcing them.
-
-**Routing keys on `commit.collection`, not on the matched record model.**
-3.83% of rows are deletes carrying no record at all, so the union yields
-`None` for them and cannot name their table. `commit.collection` is present
-on every row regardless of operation.
-
-## Consequences
-
-- The transform runs as a DuckDB read, a Python validation and routing
-  stage, and a DuckLake write, superseding ADR-0002's one-SQL-script
-  property (amended there to match). Legibility now rests on the models
-  being declarative rather than on the transform being a single query.
-- **The discriminator field must not be named `type`.** Pydantic resolves a
-  discriminated union by field name *or* alias, so a field named `type` with
-  `alias="$type"` accepts either key from the payload — and record bodies
-  are user-controlled. 6,536 sample rows carry their own bare `type` key:
-  6,535 duplicate the correct NSID, and one from a third-party posting
-  library carries a vendor string, failing the union match on an otherwise
-  valid post. Naming the field `record_type` leaves `$type` as the only key
-  that can supply the tag. Verified at 5,859,179 of 5,859,179 rows.
+- **A zero reject rate is ambiguous evidence.** 5,859,179 of 5,859,179 shows
+  the corpus passed; it cannot distinguish a clean corpus from a union that
+  fails to discriminate. Crafted input is what demonstrates the union
+  discriminates: a `$type` contradicting its collection, a missing required
+  field, a collection outside the five.
+- **The reject path is an instrument.** Its rate is how a change in upstream
+  message shape becomes visible, so the count belongs where an operator sees
+  it. A validation failure is a row-level reject — `BlueskyMessage` raises
+  before the row reaches any table, excluding rather than misfiling it, and
+  rejects land in a mart-side table
+  ([ADR-0013](0013-service-owned-pruning.md)).
+- This supersedes ADR-0002's one-SQL-script property for the transform.
 - **`discriminator="$type"` does not work.** The argument resolves against
   the field name, so pointing it at the alias raises `PydanticUserError:
   Model 'PostRecord' needs a discriminator field for key '$type'` at import
   time. Recorded because it is the obvious first thing to try.
 - Field defaults on the discriminator are inert. The union extracts the tag
-  from the raw input before defaults apply, so a record missing `$type`
-  fails with `union_tag_not_found`.
-- A validation failure is a row-level reject: `BlueskyMessage` raises before
-  the row reaches any table, excluding it rather than misfiling it. Where
-  those rejects land is an M2 decision, alongside TDD-0003's question about
-  ingest-side drops.
-- `update` operations make `(did, rkey)` recur with a new `rev`. ADR-0010's
-  dedup key includes `rev`, so both versions survive; whether the
-  per-collection tables expose every version or only the latest is left to
-  the mart schema.
-- A SQL validation pass over the DLQ would need its input guarded, since
-  DuckDB does not reliably short-circuit `CASE` across a vectorized batch: a
-  leading `json_valid` branch leaves later branches exposed, and one
-  malformed payload aborts the query with `InvalidInputException`.
-  `(CASE WHEN json_valid(payload) THEN payload ELSE '{}' END) ->> '$.did'`
-  works. `events` is unaffected — its payloads all parsed through `orjson`
-  before being queued.
-- Revisit trigger: if the transform becomes the bottleneck, Option A's 1.9x
-  is on the table, and the twelve-case SQL port that measured it is a
-  known-good starting point.
+  from the raw input before defaults apply, so a record missing `$type` fails
+  with `union_tag_not_found`.
+- `update` operations make `(did, rkey)` recur with a new `rev`, and
+  ADR-0010's dedup key includes `rev`, so both versions survive
+  ([ADR-0014](0014-mart-grain-and-transform-cadence.md)).
+- A SQL pass over the DLQ needs its input guarded: DuckDB does not reliably
+  short-circuit `CASE` across a vectorized batch, so a leading `json_valid`
+  branch leaves later branches exposed and one malformed payload aborts the
+  query. `(CASE WHEN json_valid(payload) THEN payload ELSE '{}' END)` works.
+  `events` is unaffected, since its payloads parsed through `orjson` before
+  being queued.
+- Revisit trigger: if the transform becomes the bottleneck, SQL's 1.9x is on
+  the table, and the twelve-case port that measured it is a known-good
+  starting point.

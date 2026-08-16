@@ -4,45 +4,37 @@
 
 Accepted
 
-## Context
-
-The project's portfolio goal requires that a stranger (recruiter, reviewer)
-can install and run `sup` reliably with minimal friction. This is as much a
-constraint on packaging as on code quality — a broken or fiddly install
-experience undermines the project regardless of how good the code is.
-
 ## Options considered
 
-### Option A: `pip` + `requirements.txt` / plain `setup.py`
-
-- Familiar, but slower dependency resolution and no lockfile story by
-  default; more room for "works on my machine" drift between the author's
-  environment and a stranger's.
-
-### Option B: `uv` with `pyproject.toml`, installable via `uv tool install` / `uvx`
-
-- Fast, reproducible resolution with a lockfile.
-- `uvx sup` / `uv tool install sup` gives a one-command install-and-run path,
-  which is exactly the low-friction experience the portfolio goal needs.
-- Actively maintained, increasingly the default recommendation in the Python
-  packaging ecosystem.
+- **`pip` with `requirements.txt` or a plain `setup.py`.** Familiar, but
+  slower resolution and no lockfile story by default, leaving room for drift
+  between the author's environment and a stranger's.
+- **`uv` with `pyproject.toml`, installed via `uv tool install` or `uvx`.**
+  Fast reproducible resolution with a lockfile, and a one-command
+  install-and-run path. Chosen.
 
 ## Decision
 
-**Option B.** Package with `pyproject.toml`, define a console-script entry
-point, and target `uv` (`uv tool install` / `uvx`) as the primary, documented
-install path. `pip install`-compatible packaging should still work as a
-fallback since `pyproject.toml` isn't `uv`-exclusive, but `uv` is what gets
-documented and tested against.
+Package with `pyproject.toml`, define a console-script entry point, and
+target `uv` as the primary documented install path. `pip`-compatible
+packaging keeps working, since `pyproject.toml` is not `uv`-exclusive, but
+`uv` is what gets documented and tested against.
 
-## Consequences
+## Why
 
-- README/install instructions should lead with the `uv` one-liner, not bury
-  it under generic Python packaging instructions.
-- Dependency version constraints need a real decision (exact pins vs. ranges)
-  before the first release — pins maximize reproducibility for a stranger's
-  install but require more maintenance; this is a candidate for a follow-up
-  ADR if it turns out to be contentious, otherwise a TODO item is enough.
-- Any hand-rolled pieces (per ADR-0001) still need to build cleanly as part of
-  this packaging — no separate build step or compiled artifact outside what
-  `uv`/`pyproject.toml` handles, to keep the install path uniform.
+A stranger has to be able to install and run `sup` without friction, and a
+fiddly install undermines the project regardless of how good the code is.
+`uvx sup` is that path in one command, and the lockfile is what makes it
+reproducible rather than hopeful.
+
+Accepted costs:
+
+- Install instructions lead with the `uv` one-liner rather than generic
+  Python packaging steps.
+- Dependency constraints still need a call — exact pins versus ranges —
+  before the first release.
+- Hand-rolled pieces ([ADR-0001](0001-language-and-dependency-philosophy.md))
+  must build cleanly with no separate build step or compiled artifact outside
+  what `pyproject.toml` handles.
+- Anything requiring credentials to obtain is out of scope, since it would
+  put a step between the one-liner and a working run.

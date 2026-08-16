@@ -4,103 +4,65 @@
 
 Accepted
 
-## Context
-
-`sup` needs a CLI entry point (subcommands for ingest, transform, TUI,
-dashboard, etc. — see [TODO.md](../TODO.md)) and an operational TUI (per
-[TDD-0001](../tdd/0001-architecture-overview.md) [4a]) showing live ingest
-status. Per [ADR-0001](0001-language-and-dependency-philosophy.md), both are
-solved problems that should lean on libraries rather than be hand-rolled.
-
-TDD-0001 explicitly left "TUI/dashboard framework choices... not yet formally
-chosen" as an open question. This ADR resolves the CLI/TUI half of it.
-
 ## Options considered
 
-### CLI: Typer
+**CLI**
 
-- Built on Click; type-hint-driven command definitions; large adoption,
-  immediately recognizable to Python-familiar reviewers (same lineage as
-  FastAPI, a good aesthetic match for the project's other modern-typed-Python
-  choices).
-- Known limitation: no support for `Union` types in parameters, and its
-  decorator/proxy-default-value design makes command functions somewhat
-  awkward to call directly outside Typer's own invocation path (mostly a
-  testing-style friction, not a functional blocker).
+- **Typer.** Built on Click, type-hint-driven, widely adopted and
+  immediately recognizable. No `Union` support in parameters, and its
+  proxy-default-value design makes command functions awkward to call outside
+  Typer's own invocation path — testing friction rather than a blocker.
+- **Cyclopts.** Positioned as a Typer improvement: shorter code,
+  docstring-driven help, `Union`/`Literal` parameters with automatic
+  validation. Much smaller community for a problem Typer already solves.
+- **Click / argparse.** Click is the mature foundation Typer sits on, but
+  more verbose, with decorators and parameter declarations unsynchronized.
+  `argparse` is stdlib and dependency-free but has no type-hint integration
+  and more boilerplate for a subcommand-heavy CLI.
 
-### CLI: Cyclopts
+**TUI**
 
-- Newer library explicitly positioned as a Typer improvement: shorter code,
-  docstring-driven help text, and support for `Union`/`Literal` parameter
-  types with automatic validation.
-- Smaller community and adoption than Typer; effectively a bet on a less
-  battle-tested library for a problem Typer already solves adequately.
-
-### CLI: Click / argparse
-
-- Click: the mature foundation Typer is built on, but more verbose/explicit
-  (decorator + parameter declarations not synchronized via type hints).
-- `argparse`: stdlib, zero dependency, but no type-hint integration and more
-  boilerplate for a subcommand-heavy CLI with polished help text.
-- Both are safe but give up the ergonomics/readability Typer offers for a
-  portfolio piece where the CLI itself is part of what's being shown off.
-
-### TUI: Textual
-
-- By far the most capable Python TUI framework available: reactive
-  component model, CSS-like styling, async event loop, and published
-  engineering work specifically on high-performance rendering for
-  live-updating terminal apps — directly relevant to sup's ingest-rate and
-  connection-status widgets.
-- **Governance risk:** Textualize, Inc. (the company behind Textual and
-  Rich) shut down in May 2025. Founder Will McGugan stated the company
-  "struggled to identify a viable business model" but committed to
-  personally continuing to maintain both projects as open source. That
-  commitment has held up in practice — Textual shipped v4.0 (the "Streaming
-  Release") in July 2025, after the shutdown announcement — but this is now
-  effectively a single-maintainer project rather than a funded team, which
-  is a real bus-factor risk for a tool meant to install and run reliably for
-  strangers.
-- See [The future of Textualize](https://textual.textualize.io/blog/2025/05/07/the-future-of-textualize/)
-  and [Textual v4.0](https://simonwillison.net/2025/Jul/22/textual-v4/).
-
-### TUI: alternatives (urwid, prompt_toolkit, hand-rolled curses)
-
-- All lower-level than Textual, meaning more of the TUI itself would need to
-  be hand-rolled — directly against ADR-0001's reasoning for a solved
-  problem. None avoid a governance-risk tradeoff of their own (urwid is
-  older and less actively developed; prompt_toolkit is maintained but
-  designed more for input/prompting than full-screen apps).
+- **Textual.** The most capable Python TUI framework: reactive component
+  model, CSS-like styling, async event loop, and published engineering work
+  on high-performance rendering for live-updating terminal apps, which is
+  directly relevant to the ingest-rate and connection-status widgets.
+  Textualize, Inc. shut down in May 2025, leaving it effectively a
+  single-maintainer project
+  ([the future of Textualize](https://textual.textualize.io/blog/2025/05/07/the-future-of-textualize/)),
+  though v4.0 shipped that July
+  ([Textual v4.0](https://simonwillison.net/2025/Jul/22/textual-v4/)).
+- **urwid, prompt_toolkit, hand-rolled curses.** All lower-level, so more of
+  the TUI itself gets hand-rolled against
+  [ADR-0001](0001-language-and-dependency-philosophy.md)'s reasoning for a
+  solved problem. None avoid a governance tradeoff of their own — urwid is
+  less actively developed, and prompt_toolkit is built for prompting rather
+  than full-screen apps.
 
 ## Decision
 
 **Typer for the CLI, Textual for the TUI.**
 
-Typer over Cyclopts specifically because of risk-stacking: `sup` is already
-making one real bet on newer, less-proven tooling
-([ADR-0002](0002-raw-ingestion-durability.md)'s DuckLake choice). Typer's
-maturity and ubiquity is a better complement to that than compounding it with
-a second smaller-community pick. If Typer's `Union`-type limitation turns out
-to block a real CLI need, that's the trigger to revisit — not a reason to
-pre-emptively switch.
+## Why
 
-Textual accepted despite the post-shutdown single-maintainer risk, because
-the capability gap versus every alternative is large enough that hand-rolling
-would mean reinventing a solved problem, and the project has continued
-shipping meaningful releases since the company wound down.
+Typer over Cyclopts is about risk-stacking rather than merit. `sup` already
+makes one real bet on newer tooling in
+[ADR-0002](0002-raw-ingestion-durability.md)'s DuckLake choice, and Typer's
+maturity complements that better than a second smaller-community pick
+compounds it. The `Union` limitation blocking a real CLI need is the trigger
+to revisit, not a reason to switch pre-emptively.
 
-## Consequences
+Textual is accepted despite the single-maintainer risk because the
+capability gap over every alternative is large enough that the alternative
+is reinventing a solved problem, and the project has kept shipping
+meaningful releases since the company wound down.
 
-- Textual's version should be pinned deliberately rather than tracking
-  latest automatically — a reduced-maintenance-capacity dependency is not
-  the place to absorb upstream churn without review.
-- If Textual's maintenance visibly stalls (no releases, unaddressed critical
-  bugs) before `sup` reaches the TUI milestone (M3), this decision should be
-  revisited rather than assumed still valid — check current project activity
-  at that point, don't rely on this ADR's snapshot.
-- The CLI's help text and structure become part of the portfolio surface
-  (a reviewer's first interaction with the tool) — Typer's type-hint-driven
-  approach should be used to keep that polished, not just functional.
-- Deferred, not blocked: the analytics dashboard's UI framework is a separate
-  open question (TDD-0001), not resolved by this ADR — it's a browser-facing
-  concern, not a TUI one.
+Accepted costs:
+
+- Textual's version gets pinned deliberately rather than tracking latest. A
+  dependency with reduced maintenance capacity is not where to absorb
+  upstream churn unreviewed.
+- If Textual's maintenance visibly stalls before the TUI milestone (M3),
+  this decision gets re-checked against project activity at that point
+  rather than against this snapshot.
+- The CLI's help text and structure are part of the portfolio surface, being
+  a reviewer's first interaction with the tool.

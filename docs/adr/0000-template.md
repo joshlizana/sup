@@ -2,35 +2,24 @@
 
 ## Status
 
-Proposed | Accepted | Rejected | Superseded by ADR-NNNN
-
-## Context
-
-What problem are we solving? What constraints (technical, portfolio-facing,
-learning-goal) apply? What prompted this decision now?
+Proposed | Accepted | Rejected
 
 ## Options considered
 
-### Option A: <name>
-
-- Description
-- Pros
-- Cons
-
-### Option B: <name>
-
-- Description
-- Pros
-- Cons
-
-(Add more as needed.)
+Each candidate in a line or two: what it is, and the factor that decided
+for or against it. Not a full pros-and-cons inventory — the winner's detail
+belongs below.
 
 ## Decision
 
-Which option was chosen, and why — the deciding factor(s), not just a summary
-of the winning option's pros.
+What was decided, stated as the system's current shape rather than as a
+choice between candidates. Include sub-decisions that travel with it.
 
-## Consequences
+## Why
 
-What this makes easier, what it makes harder, and what it forecloses. Include
-anything that becomes technical debt or a future revisit trigger.
+The reasoning and the evidence behind it — measurements, observed failures,
+constraints that ruled the alternatives out. Name a rejected option only
+where knowing why it lost explains the decision.
+
+Close with accepted costs: what this makes harder, what it obliges elsewhere,
+and anything that should trigger a revisit.

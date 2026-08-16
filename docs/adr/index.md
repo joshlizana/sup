@@ -17,3 +17,7 @@
 | [0013](0013-service-owned-pruning.md) | Each service prunes its own store | Accepted |
 | [0014](0014-mart-grain-and-transform-cadence.md) | Mart grain is one row per event; cycles trigger on backlog | Accepted |
 | [0015](0015-tui-as-control-plane-client.md) | The TUI is a control-plane client | Accepted |
+| [0016](0016-disable-websocket-keepalive.md) | Jetstream connections run without websocket keepalive | Accepted |
+| [0018](0018-event-time-from-commit-rev.md) | Event time comes from `commit.rev` | Accepted |
+| [0019](0019-endpoint-witness-lag-screening.md) | Readers screen their endpoint's witness lag | Accepted |
+| [0020](0020-live-tail-cursor-clamping.md) | The live tail is defended against cursor clamping | Accepted |

@@ -4,101 +4,70 @@
 
 Accepted
 
-## Context
-
-Bare `sup` (no subcommand) is going to orchestrate launching ingest,
-mart transform, the TUI, and the dashboard together, rather than requiring
-each to be started separately. This is a real architecture decision, not
-just CLI UX: it determines whether ingest and the mart transform end up
-running as genuinely separate OS processes or as concurrent tasks sharing
-one process (e.g. asyncio tasks alongside Textual's event loop, which
-supports background `Worker`s cleanly).
-
-This connects directly to [ADR-0002](0002-raw-ingestion-durability.md)'s
-accepted risk: that ADR knowingly accepted *cross-process* SQLite/DuckDB
-concurrency as unvalidated but plausible, specifically because the one
-concurrency bug actually found in research
-([duckdb-sqlite#82](https://github.com/duckdb/duckdb-sqlite/issues/82)) is a
-*same-process* scenario — one connection writing to a SQLite file while
-another reads it in the same process, causing crashes (`SIGBUS`) and lock
-errors. An in-process orchestration model for ingest + transform would risk
-walking directly into that more clearly-documented-as-broken scenario,
-undermining the risk boundary ADR-0002 deliberately drew.
-
-Streamlit's dashboard runs its own Tornado server regardless of this
-decision, so it needs to be a subprocess either way — it isn't part of the
-tradeoff.
-
 ## Options considered
 
-### In-process: asyncio tasks + Textual workers
+- **In-process: asyncio tasks and Textual workers.** A simpler single-process
+  model for ingest, transform and the TUI, and Textual's `Worker` system
+  handles async or threaded background work without blocking the UI event
+  loop. Puts ingest and transform in one process, which is the
+  documented-broken SQLite/DuckDB case.
+- **Separate OS processes, `sup` as supervisor.** Keeps ingest and the mart
+  transform genuinely separate, at the cost of real process-lifecycle work
+  and a plan for four processes' output. Chosen.
 
-- Simpler single-process model for ingest, transform, and the TUI.
-- Textual's `Worker` system supports async/threaded background tasks
-  cleanly without blocking the UI event loop.
-- Risks the documented same-process SQLite/DuckDB concurrency bug for the
-  ingest↔transform relationship specifically.
-
-### Separate OS processes, `sup` as supervisor
-
-- `sup` (bare) spawns and supervises subprocesses for ingest, the mart
-  transform loop, and the dashboard; the TUI runs in the main process,
-  attached to the terminal.
-- Keeps ingest and the mart transform in genuinely separate processes,
-  matching the scenario ADR-0002 actually accepted the risk for, not the
-  worse one.
-- More implementation work: process lifecycle (start, monitor, clean
-  shutdown/signal propagation), and a plan for multiple subprocesses'
-  output (raw interleaved stdout from four processes would be unusable).
+Streamlit runs its own Tornado server regardless, so the dashboard is a
+subprocess either way and is not part of the tradeoff.
 
 ## Decision
 
-**Separate OS processes.** Bare `sup` supervises subprocesses for ingest,
-the mart-transform loop, and the Streamlit dashboard; the TUI runs in the
-main process attached to the terminal, and is the control surface every
-command is issued from. Individual subcommands (`sup ingest`,
-`sup transform`, `sup tui`, `sup dashboard`) are how the orchestrator spawns
-each service — it re-invokes its own entry point rather than duplicating
-service logic in-process. They stay usable by hand for development, without
-being a supported product surface.
+Bare `sup` supervises subprocesses for ingest, the mart-transform loop, and
+the Streamlit dashboard. The TUI runs in the main process attached to the
+terminal, and is the control surface every command is issued from. The
+orchestrator spawns each service by re-invoking its own entry point —
+`sup ingest`, `sup transform`, `sup tui`, `sup dashboard` — rather than
+duplicating service logic in-process. Those subcommands stay usable by hand
+for development without being a supported product surface.
 
 Bare `sup` is the only run mode: TUI and dashboard always launch alongside
-ingest and transform. A headless mode was considered and rejected — the
-charter scopes this to a single-operator local tool, self-daemonizing
-duplicates what systemd already does, and anyone who does not want to look
-at the dashboard can close the browser.
+ingest and transform. A headless mode is rejected — the charter scopes this
+to a single-operator local tool, self-daemonizing duplicates what systemd
+already does, and anyone who does not want to look at the dashboard can
+close the browser.
 
-Chosen specifically because it keeps ADR-0002's accepted risk boundary
-intact (cross-process concurrency, which is unvalidated but not the
-documented-broken case) rather than accidentally trading it for a worse,
-better-documented one for the sake of CLI simplicity.
+## Why
 
-## Consequences
+[ADR-0002](0002-raw-ingestion-durability.md) accepted cross-process
+SQLite/DuckDB concurrency as unvalidated but plausible, specifically because
+the one concurrency bug found in research
+([duckdb-sqlite#82](https://github.com/duckdb/duckdb-sqlite/issues/82)) is a
+*same-process* scenario: one connection writing to a SQLite file while
+another reads it in the same process, causing `SIGBUS` and lock errors. An
+in-process model for ingest and transform walks directly into that
+better-documented failure. Separate processes keep the risk boundary where
+ADR-0002 drew it instead of trading it for a worse one to simplify the CLI.
 
-- Process-lifecycle management becomes real, necessary work: starting each
-  subprocess, monitoring liveness, and propagating shutdown (Ctrl+C on the
-  TUI/main process should cleanly stop the ingest, transform, and dashboard
-  subprocesses, not orphan them). Should be tested explicitly — e.g. kill
-  the parent and verify children don't leak.
-- Subprocess output needs a plan (log files, or only surfaced through
-  TUI/dashboard state) — not yet resolved, see Open Questions in
-  [TDD-0001](../tdd/0001-architecture-overview.md).
-- Slightly more implementation work up front than an in-process model, in
-  exchange for not accidentally compounding ADR-0002's already-accepted
-  concurrency risk.
-- **The TUI keeping the terminal is what makes this cheap.** As a fourth
-  subprocess it would share one tty with its parent: the orchestrator could
-  never write to stdout or stderr again, `start_new_session` would cost it
-  SIGWINCH, and a hard-killed TUI would leave the parent's terminal in raw
-  mode. In the main process, Textual owns the terminal and restores it, and
-  supervision runs as Textual `Worker`s on the same loop.
+The TUI keeping the terminal is what makes supervision cheap. As a fourth
+subprocess it would share one tty with its parent: the orchestrator could
+never write to stdout or stderr again, `start_new_session` would cost it
+SIGWINCH, and a hard-killed TUI would leave the parent's terminal in raw
+mode. In the main process, Textual owns the terminal and restores it, and
+supervision runs as Textual `Worker`s on the same loop.
+
+Accepted costs:
+
+- Process lifecycle becomes real work: starting each subprocess, monitoring
+  liveness, and propagating shutdown so Ctrl+C on the main process stops the
+  children rather than orphaning them. Worth an explicit test that kills the
+  parent and checks for leaks.
 - **Ctrl+C reaches every child in the process group.** Measured: a
   default-spawned child receives SIGINT at the same instant as the parent,
   while `start_new_session=True` isolates it. Ordered shutdown therefore
-  requires spawning the three services into their own process groups so only
-  the main process catches the terminal signal — see
+  spawns the three services into their own process groups so only the main
+  process catches the terminal signal —
   [TDD-0002](../tdd/0002-cli-orchestration.md) §5.
-- Standalone subcommands stay runnable but stop being a design constraint.
-  Each service still handles SIGTERM so an external `kill` is graceful, which
-  is defensive rather than load-bearing now that the orchestrator drives
+- Subprocess output needs a plan, either log files or surfacing only through
+  TUI and dashboard state. Unresolved; see Open Questions in
+  [TDD-0001](../tdd/0001-architecture-overview.md).
+- Each service still handles SIGTERM so an external `kill` is graceful.
+  Defensive rather than load-bearing, now that the orchestrator drives
   shutdown over the control plane.
