@@ -87,11 +87,36 @@ documented `uv` command, with no manual steps.
 - [ ] Prune `gap_index` on the retention floor — the durable coverage record
       once `events` is a buffer, growing ~400 MB/day unpruned
 
-**Acceptance:** run for an extended period, `kill -9` mid-stream, restart, and
-confirm no corruption and a bounded loss window. A clean run reached 99.93%
-second-level coverage over a continuous 24.3-hour window with zero gaps over
-10s, and `quick_check` returned `ok` on the 23.6 GB store while ingest kept
-writing.
+**Acceptance**
+
+Demonstrated:
+
+- [x] 99.93% second-level coverage over a continuous 24.3-hour window with
+      zero gaps over 10s
+- [x] `quick_check` returns `ok` on a 23.6 GB store while ingest keeps writing
+- [x] 0.56% duplicates over a 24.24-hour window, which is the shard overlap
+      and nothing more ([ADR-0010](adr/0010-deduplication-in-the-mart.md))
+- [x] A degraded endpoint is screened out mid-run and the pool carries on
+      ([ADR-0019](adr/0019-endpoint-witness-lag-screening.md))
+- [x] A dropped connection re-queues the unread remainder rather than the
+      whole range
+
+Untested:
+
+- [ ] `kill -9` mid-stream, then restart: no corruption, and a loss window
+      bounded by the queues' `maxsize` plus the in-flight `executemany`
+      ([ADR-0009](adr/0009-bounded-write-queues.md))
+- [ ] Stop for a known duration, restart, and confirm the audit reports a gap
+      of that size at that position (TDD-0003 §1)
+- [ ] A second `sup ingest` against the same data directory refuses and exits
+      non-zero ([ADR-0007](adr/0007-control-plane-ipc.md))
+- [ ] `kill -9` leaves a stale lock file and socket; the next start acquires
+      the `flock` anyway and clears them (ADR-0007)
+- [ ] An unreachable endpoint backs off rather than reconnecting in a loop
+- [ ] The DLQ receives a row. It has stayed empty on every run, so the path
+      is unexercised rather than proven
+      ([ADR-0011](adr/0011-record-validation-and-routing-in-the-mart.md) makes
+      the same point about the mart's reject path)
 
 ## M2: Minimal mart transform
 
