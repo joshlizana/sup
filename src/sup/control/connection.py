@@ -77,7 +77,6 @@ class SupListener:
             self.locked = True
         except (BlockingIOError):
             self.file_description.close()
-            self.log.info(f"Failed to acquire lock for {self.lock_file}. {self.service} service already running.")
             raise RuntimeError(f"{self.service} service is already running.")
 
     def _release_lock(self):

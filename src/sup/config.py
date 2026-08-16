@@ -35,7 +35,7 @@ class Config(BaseModel):
         position the endpoints still serve, and falls back to this when
         every probe fails.
         """
-        return (int(time.time()) - 24 * 60 * 60) * 1_000_000 # 24 hours ago in microseconds
+        return (int(time.time() * 1_000_000) - (24 * 60 * 60 * 1_000_000))# 24 hours ago in microseconds
 
     @computed_field
     @property

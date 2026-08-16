@@ -13,8 +13,11 @@ def ingest():
     async def _run():
         async with Ingester() as ingester:
             await ingester.run()
-
-    asyncio.run(_run())
+    try:
+        asyncio.run(_run())
+    except RuntimeError as e:
+        print(f"Error: {e}")
+        raise typer.Exit(code=1)
 
 
 @app.callback(invoke_without_command=True)
