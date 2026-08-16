@@ -6,8 +6,9 @@ Accepted
 
 ## Decision
 
-`sup clean` wipes all ingested data — the raw SQLite store, the DuckLake
-catalog, and the DuckLake data files.
+`sup clean` wipes all ingested data — the raw SQLite store, `index.db`, the
+DuckLake catalog, and the DuckLake data files. The raw stores sit under
+`Config.data_path` and the mart under `Config.ducklake_path`.
 
 - **Both locks free**, meaning neither service is running: wipe directly.
   Nothing is using the files, so no pause or resume is involved.
@@ -40,7 +41,8 @@ Accepted costs:
 
 - The confirmation requirement means `sup clean` cannot run unattended
   without an explicit opt-in flag.
-- The fresh-cursor behaviour falls out for free only while cursor and resume
-  state lives inside the raw SQLite store this wipes. If that state ever
-  moves elsewhere, `sup clean` gains a second thing it must clear explicitly.
-  Worth confirming against where M1 actually put it.
+- Ingest's position is derived by scanning `gap_index`, which outlives the
+  rows it describes ([ADR-0013](0013-service-owned-pruning.md)), so `index.db`
+  is part of the wipe. A clean that spares it leaves `gap_index` asserting
+  coverage for events that are gone, and the next start's audit finds no gap
+  to backfill.

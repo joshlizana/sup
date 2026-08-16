@@ -2,13 +2,20 @@
 dashboard) attach to `app` as they're built."""
 
 import typer
+import logging
 import asyncio
+from sup.boostrap import bootstrap_ingest
 from sup.services.ingest.ingest import Ingester
 
 app = typer.Typer()
+logger = logging.getLogger(__name__)
 
 @app.command()
 def ingest():
+    
+    logger.info("Boostrapping ingest databases...")
+    asyncio.run(bootstrap_ingest())
+    logger.info("Starting ingest...")
 
     async def _run():
         async with Ingester() as ingester:

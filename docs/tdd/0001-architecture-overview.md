@@ -92,7 +92,8 @@ validated through `models.py`'s discriminated union and routed to
 per-collection tables on `commit.collection`
 ([ADR-0011](../adr/0011-record-validation-and-routing-in-the-mart.md)).
 Routing keys on the collection rather than the matched model because deletes —
-3.8% of rows — carry no record.
+3.8% of rows — carry no record. The columns each table lands in are in
+[TDD-0004](0004-mart-schema.md).
 
 It reads incrementally via a watermark on the raw store's PK and
 **deduplicates on `(did, rkey, rev)`** as it goes. Reading through SQLite
@@ -131,11 +132,14 @@ handful of focused views, with queries wrapped in `@st.cache_data`.
 
 ## Open questions
 
-- Exact watermark state-table shape. It also carries the position ingest
-  prunes against ([ADR-0013](../adr/0013-service-owned-pruning.md)), so both
-  services read it.
-- Per-collection mart table columns — which fields each model contributes.
-  Grain, routing and version policy are settled
+- **Resolved:** the watermark is a mart table holding the raw-store `pk` the
+  transform has committed ([TDD-0004](0004-mart-schema.md)). It carries the
+  position ingest prunes against
+  ([ADR-0013](../adr/0013-service-owned-pruning.md)), so both services read
+  it.
+- **Resolved:** per-collection mart table columns are in
+  [TDD-0004](0004-mart-schema.md), measured against a 28,996,394-event raw
+  store. Grain, routing and version policy are settled
   ([ADR-0014](../adr/0014-mart-grain-and-transform-cadence.md)).
 - Orchestration remains proposed rather than built
   ([TDD-0002](0002-cli-orchestration.md)).
@@ -150,7 +154,9 @@ handful of focused views, with queries wrapped in `@st.cache_data`.
   which is the shard overlap and nothing more.
 - **Resolved:** each service records its own discards. Ingest's DLQ stays in
   the raw store; validation rejects land in a mart-side reject table.
-- **Resolved:** the raw-table schema is `src/sup/boostrap.py`.
+- **Resolved:** `src/sup/boostrap.py` holds one bootstrap function per
+  service, each called from that service's invocation
+  ([ADR-0022](../adr/0022-per-service-bootstrap.md)).
 
 ## Alternatives considered
 

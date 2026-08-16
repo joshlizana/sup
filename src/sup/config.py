@@ -53,3 +53,11 @@ class Config(BaseModel):
         control_path = self.default_path / "control"
         control_path.mkdir(exist_ok=True)
         return control_path
+
+    @computed_field
+    @property
+    def ducklake_path(self) -> Path:
+        """Directory holding the DuckLake catalog, separate from `data_path`. Created on access."""
+        ducklake_path = self.data_path / "ducklake"
+        ducklake_path.mkdir(exist_ok=True)
+        return ducklake_path

@@ -1,7 +1,9 @@
-"""Async database clients for the two stores described in ADR-0002.
+"""Async database clients for the three stores described in ADR-0002.
 
-Both wrap a driver that runs its blocking calls on a worker thread. Each
-takes a filename and resolves it against the shared data directory.
+Each wraps a driver that runs its blocking calls on a worker thread.
+`SQLiteClient` and `DuckDBClient` take a filename and resolve it against
+the shared data directory; `DucklakeClient` attaches the mart, whose
+location is fixed.
 """
 
 import aioduckdb
@@ -91,3 +93,32 @@ class DuckDBClient:
     async def fetchone(self, query: str, params: tuple = ()):
         async with self.conn.execute(query, params) as cursor:
             return await cursor.fetchone()
+
+class DucklakeClient:
+    """Connection to the mart.
+
+    The DuckDB instance is in-memory and holds no data: it is the handle
+    the DuckLake catalog attaches to, and every table lives in the lake
+    (ADR-0002). The catalog is SQLite, selected by the `sqlite:` prefix,
+    with Parquet under `DATA_PATH`.
+    """
+
+    def __init__(self):
+        self.data_path = Config().ducklake_path
+        self.conn = None
+        self.cursor = None
+        self.log = register(logging.getLogger(__name__), self.__class__.__name__)
+
+    async def __aenter__(self):
+        self.log.info("Initializing Ducklake client")
+        self.conn = await aioduckdb.connect(':memory:')
+        await self.conn.execute("LOAD ducklake;")
+        await self.conn.execute("LOAD sqlite;")
+        await self.conn.execute(f"ATTACH 'ducklake:sqlite:{self.data_path}/sup.ducklake' AS sup_lake ( DATA_PATH '{self.data_path}' );")
+        self.cursor = await self.conn.cursor()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        self.log.info("Exiting Ducklake client")
+        if self.conn is not None:
+            await self.conn.close()

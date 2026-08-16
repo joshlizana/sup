@@ -131,13 +131,16 @@ Demonstrated:
 
 ## M2: Minimal mart transform
 
-- [x] `INSTALL ducklake` / `INSTALL sqlite` in `bootstrap()`
-      ([ADR-0002](adr/0002-raw-ingestion-durability.md))
-- [ ] Mart schema created by the transform, the only writer: five
-      per-collection tables plus the reject table. `ATTACH` creates the
-      SQLite catalog itself, so `bootstrap()` stays out of it — it runs in
-      every process, and ingest and the dashboard have no business holding
-      a mart handle ([ADR-0015](adr/0015-tui-as-control-plane-client.md))
+- [x] `INSTALL ducklake` / `INSTALL sqlite` in `bootstrap_ingest()`
+      ([ADR-0002](adr/0002-raw-ingestion-durability.md)), the first service
+      the supervisor starts ([ADR-0022](adr/0022-per-service-bootstrap.md))
+- [ ] `bootstrap_ingest()` creates the raw schemas, called from `sup ingest`,
+      with `main()` handing straight to the Typer app
+      ([ADR-0022](adr/0022-per-service-bootstrap.md))
+- [ ] `bootstrap_transform()` attaches the DuckLake catalog and creates the mart
+      schema: five per-collection tables plus the reject table, columns in
+      [TDD-0004](tdd/0004-mart-schema.md). The transform calls it and is the
+      mart's only writer (ADR-0022)
 - [ ] Transform reads the raw store through `aiosqlite` and writes to
       DuckLake, with the Pydantic validation and routing stage between
       ([ADR-0002](adr/0002-raw-ingestion-durability.md))
@@ -158,16 +161,18 @@ Demonstrated:
 - [ ] Publish the committed position into the mart, where the transform is
       already the only writer, for ingest to read through DuckDB (ADR-0013).
       Prerequisite for the prune
-- [ ] `Maintenance` in the writer module, sharing the writer's connection
-      and running after its flush ([ADR-0021](adr/0021-ingest-maintenance.md)):
-      mirror `gap_index`, read the committed position, prune `events` below
-      it, `incremental_vacuum`. Until it lands the raw store accumulates at
-      ~21 GB/day
-- [ ] Prune `gap_index` on the retention floor — the durable coverage record
-      once `events` is a buffer, growing ~400 MB/day unpruned (ADR-0013)
-- [ ] Purge mart rows past the retention floor
-      ([ADR-0012](adr/0012-rolling-retention-window.md)): `DELETE`,
-      `ducklake_expire_snapshots`, `ducklake_cleanup_old_files`, on a schedule
+- [ ] `Maintenance`, one instance per service, each taking the connection its
+      service writes through and running after that write pass, on a time
+      check ([ADR-0021](adr/0021-service-maintenance.md))
+- [ ] Ingest's instance, in the writer module on the `Writer`'s
+      `SQLiteClient`: mirror `gap_index`, read the committed position, prune
+      `events` below it, `incremental_vacuum`, prune `gap_index` on the
+      retention floor. Until it lands the raw store accumulates at ~21 GB/day
+      and `gap_index` at ~400 MB/day (ADR-0013)
+- [ ] The transform's instance, on its DuckLake connection: purge mart rows
+      past the retention floor
+      ([ADR-0012](adr/0012-rolling-retention-window.md)) with `DELETE`,
+      `ducklake_expire_snapshots`, `ducklake_cleanup_old_files`
 - [ ] Control-plane socket + `flock` lock, same design as ingest's
 - [ ] Graceful shutdown finishing the current cycle, working standalone
 - [ ] Same pause/resume/quiesce treatment as ingest (TDD-0002 §6); quiesce is

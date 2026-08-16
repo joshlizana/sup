@@ -21,4 +21,5 @@
 | [0018](0018-event-time-from-commit-rev.md) | Event time comes from `commit.rev` | Accepted |
 | [0019](0019-endpoint-witness-lag-screening.md) | Readers screen their endpoint's witness lag | Accepted |
 | [0020](0020-live-tail-cursor-clamping.md) | The live tail is defended against cursor clamping | Accepted |
-| [0021](0021-ingest-maintenance.md) | Maintenance shares the writer's connection | Accepted |
+| [0021](0021-service-maintenance.md) | Maintenance shares the writer's connection | Accepted |
+| [0022](0022-per-service-bootstrap.md) | Each service bootstraps its own store | Accepted |

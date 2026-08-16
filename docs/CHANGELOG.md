@@ -31,6 +31,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   prerequisite it exposed for M1.
 - TDD-0003: every-start gap detection against a cross-endpoint retention
   floor, parallel sharded backfill, and one priority work queue.
+- TDD-0004: mart columns for all five collections plus the reject table,
+  derived from a full pass over a 28,996,394-event raw store. Records the
+  `via` strong ref on 3,402,182 likes, 863,199 reposts and 322,855 follows,
+  the six embed types, and 40 undeclared extension keys that stay out of
+  typed columns.
 - ADR-0006: bare `sup` supervises ingest, transform and dashboard as
   separate processes; the TUI stays in the main process as the control
   surface. Headless rejected against the single-operator charter.
@@ -73,6 +78,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   is clean; the live tail reconnects seconds behind and replays the window,
   compounded by `current_cursor` moving backward. This is the cause of the
   46.19% duplicate share.
+- ADR-0021: ingest and the transform each run a `Maintenance` instance
+  against the stores they own, taking the connection that service already
+  writes through and running after its write pass. Each step commits its own
+  transaction, so an interrupted pass resumes.
+- ADR-0022: `boostrap.py` holds one bootstrap function per service, each
+  called from that service's invocation. A single `bootstrap()` ahead of
+  Typer's dispatch runs for `sup --help` and in all four orchestrated
+  subprocesses, and adding the mart tables to it would make ingest, the
+  dashboard and the TUI writers of the mart.
 
 ### Changed
 
