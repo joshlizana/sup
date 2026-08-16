@@ -71,6 +71,12 @@ Accepted costs:
   probe reads past any message whose `rev` decodes implausibly
   ([ADR-0018](0018-event-time-from-commit-rev.md)) rather than failing an
   endpoint on the arithmetic.
+- **A connect failure is not a screening signal.** The verdict comes from a
+  message, so an endpoint that never connects is neither screened out nor
+  marked: every reader spends a probe cycle on it each pass, and it
+  contributes nothing to the retention floor. The audit's concurrent probe
+  is bounded by a 15-second timeout, so one such endpoint sets the floor on
+  how long a startup audit takes.
 - Losing an endpoint costs little throughput: the pool already reads near the
   ceiling endpoint capacity sets, and the failing endpoint contributed 8.9%
   of rows, most of them unusable.

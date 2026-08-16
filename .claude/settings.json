@@ -3,5 +3,20 @@
     "allow": [
       "WebSearch"
     ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /home/sup/.claude/writing-guidelines-hook.py",
+            "timeout": 10,
+            "statusMessage": "Checking writing guidelines"
+          }
+        ]
+      }
+    ]
   }
 }
