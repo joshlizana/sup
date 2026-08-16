@@ -109,6 +109,7 @@ class Reader:
                     self.log.info(f"Retention: {displayTime(self.retention)}")
                 except Exception as e:
                     self.log.error(f"Error occurred while fetching endpoint retention: {e}")
+                    await asyncio.sleep(1)
                     return
 
         # Ranges below this endpoint's retention floor go back into the

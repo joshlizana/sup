@@ -124,9 +124,10 @@ Demonstrated:
       stays empty on a healthy one, so its rate is an instrument rather than
       a defect count
       ([ADR-0011](adr/0011-record-validation-and-routing-in-the-mart.md))
-- [x] An unreachable endpoint backs off rather than reconnecting in a loop:
-      12 connection attempts in 45 s, one probe cycle per 15 s, with the
-      claimable range left in the queue for another Reader
+- [x] An unreachable endpoint backs off rather than reconnecting in a loop,
+      in both variants: 0.27 attempts/s against a port that refuses, 0.05/s
+      against a host that blackholes, with the claimable range left in the
+      queue for another Reader either way
 
 ## M2: Minimal mart transform
 
