@@ -60,15 +60,13 @@ class JetstreamClient:
         return await self.ws.recv()
 
     async def get_endpoint_health(self):
-        """Return `(retention, health)` for this endpoint.
+        """Return `(retention, health)`, given a cursor-0 client.
 
         `retention` is the `time_us` of the oldest event served; `health`
-        is 1 when that event's witness lag is within tolerance and 0
-        otherwise. Reads until a commit message whose `rev` decodes to a
-        plausible time, since a counter-minted one would fail the lag
-        check on arithmetic rather than on lag (ADR-0018, ADR-0019), then
-        closes. Raises if a message fails to parse. Requires the client to
-        have been constructed with cursor 0.
+        is 1 when its witness lag is within tolerance (ADR-0019). Reads
+        past any message whose `rev` decodes implausibly, which would
+        fail the lag check on arithmetic rather than on lag (ADR-0018).
+        Raises if a message fails to parse.
         """
         found_retention = False
         while not found_retention:

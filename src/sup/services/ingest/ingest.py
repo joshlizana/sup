@@ -95,15 +95,11 @@ class Ingester:
 
 
     async def return_status(self):
-        """Return a dict of the current status of the service.
+        """Return the service's current status as a dict (ADR-0015).
 
-        Answers the control plane's `status` command
-        ([ADR-0015](../../../docs/adr/0015-tui-as-control-plane-client.md)).
-        `Controller` hands each connection's handler to the event loop that
-        owns this service, so reading queue depths and reader state here
-        needs no synchronisation. It also adds its own `status` to this
-        dict before replying, since the lifecycle state is the Controller's
-        to know.
+        `Controller` runs each connection handler on the loop that owns
+        this service, so these reads need no synchronisation, and it adds
+        its own lifecycle `status` before replying.
         """
         throughput = sum(reader.throughput for reader in self.readers)
         readers = sum(1 for reader in self.readers if reader.reading)

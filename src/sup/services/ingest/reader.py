@@ -91,15 +91,14 @@ class Reader:
     async def get_work(self):
         """Claim the oldest eligible range from the shared queue.
 
-        Establishes this endpoint's retention floor and health on the
-        first call, returning without claiming when the probe fails so
-        the next pass retries it. A range is ineligible when it starts
-        below the retention floor, when it is the open-ended live tail
-        and this endpoint is backfill-only, or when the endpoint is
-        unhealthy; ineligible ranges go back to the queue for another
-        Reader. Sets the cursor triple when a range is claimed, and
-        sleeps a second before returning either way, pacing both an
-        empty queue and a range this endpoint cannot make progress on.
+        Probes this endpoint's retention floor and health on the first
+        call, returning without claiming if that fails so the next pass
+        retries. A range is ineligible below the retention floor, or when
+        it is the live tail and this endpoint is backfill-only, or when
+        the endpoint is unhealthy; those go back for another Reader.
+
+        Sleeps a second before returning either way, pacing both an empty
+        queue and a range this endpoint cannot progress.
         """
         # Probed once per Reader lifetime, then cached.
         async with asyncio.timeout(15):
@@ -134,25 +133,17 @@ class Reader:
     async def process_message(self, data):
         """Queue one raw message for the writer, or send it to the DLQ.
 
-        `did`, `time_us` and `kind` are top-level fields; `rkey` and `rev`
-        are nested inside `commit`. The payload is queued verbatim
-        alongside the extracted columns. Both queues are bounded, so a put
-        against a full queue suspends until the writer drains it.
+        Both queues are bounded, so a put against a full one suspends
+        until the writer drains it. A message missing any required column
+        is dropped rather than queued, and the cursor still advances past
+        it (TDD-0003 §4). `tid_us` falls back to `time_us` when `rev`
+        decodes implausibly (ADR-0018).
 
-        A message missing any of the four columns is dropped, carrying no
-        record from a wanted collection; the cursor still advances past it
-        (TDD-0003 §4).
-
-        `tid_us` falls back to `time_us` when `rev` decodes implausibly, so
-        the stored column never carries the zero `sup.util.tid_us` returns
-        (ADR-0018).
-
-        Returns `"break"` for either edge of the claimed range, so `run()`
+        Returns `"break"` at either edge of the claimed range, so `run()`
         ends the connection (ADR-0020). Past `end_cursor` the range is
-        finished, and the cursor moves there so nothing is re-queued.
-        Below `start_cursor` the endpoint has answered from its replay
-        floor rather than the cursor asked for; the cursor holds, so the
-        range returns to the queue for an endpoint that can serve it.
+        finished and the cursor moves there, so nothing is re-queued.
+        Below `start_cursor` the endpoint answered from its replay floor,
+        so the cursor holds and the range goes back to the queue.
         """
         try:
             message = orjson.loads(data)

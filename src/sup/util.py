@@ -52,13 +52,10 @@ def displayTime(timestamp: int):
 def tid_us(tid: str) -> int:
     """Decode a TID to microseconds, or 0 when the result is implausible.
 
-    A TID is 13 base32-sortable characters carrying 53 bits of
-    microseconds and a 10-bit clock identifier. Some implementations mint
-    `rev` as a counter rather than a clock, so a well-formed TID can
-    decode to seconds after the epoch (ADR-0018). Anything outside 2022
-    to an hour ahead of now returns 0, which callers treat as "no usable
-    time" rather than as a timestamp. The forward hour covers a PDS whose
-    clock runs ahead of the machine decoding it, measured at up to ~98 s.
+    Some implementations mint `rev` as a counter rather than a clock, so
+    a well-formed TID can decode to seconds after the epoch (ADR-0018).
+    Anything outside 2022 to an hour ahead of now returns 0. The forward
+    hour covers a PDS clock running ahead of this one, measured at ~98 s.
     """
     ALPHA = "234567abcdefghijklmnopqrstuvwxyz"
     v = 0
