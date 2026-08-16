@@ -101,7 +101,9 @@ class Ingester:
         ([ADR-0015](../../../docs/adr/0015-tui-as-control-plane-client.md)).
         `Controller` hands each connection's handler to the event loop that
         owns this service, so reading queue depths and reader state here
-        needs no synchronisation.
+        needs no synchronisation. It also adds its own `status` to this
+        dict before replying, since the lifecycle state is the Controller's
+        to know.
         """
         throughput = sum(reader.throughput for reader in self.readers)
         readers = sum(1 for reader in self.readers if reader.reading)

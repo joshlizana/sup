@@ -20,7 +20,7 @@ class Controller:
     Pause keeps the accept loop, lock, and socket alive; shutdown stops
     accepting."""
 
-    def __init__(self, service: str, quiesce: callable, resume: callable, shutdown: callable):
+    def __init__(self, service: str, quiesce: callable, resume: callable, shutdown: callable, return_status: callable):
         self.service: str = service
         self.client: SupClient | None = None
         self.listener: SupListener | None = None
@@ -37,6 +37,7 @@ class Controller:
         self.quiesce: callable = quiesce
         self.resume: callable = resume
         self.shutdown: callable = shutdown
+        self.return_status: callable = return_status
         self.log = register(logging.getLogger(__name__), self.__class__.__name__)
         self._prev_handlers: dict = {}
         self._signal_task: asyncio.Task | None = None
@@ -117,6 +118,10 @@ class Controller:
                         case "shutdown":
                             response = await self._shutdown()
                             await asyncio.to_thread(conn.send,response)
+                        case "status":
+                            response = await self._return_status()
+                            response["status"] = self.status
+                            await asyncio.to_thread(conn.send,response)
                         case "stopping":
                             # The self-connect from _release_accept_block()
                             # lands here, as a way to unblock accept().
@@ -125,6 +130,9 @@ class Controller:
                             self.log.warning(f"Unhandled command: {msg['cmd']}")
         except Exception as e:
             self.log.error(f"Error occurred while handling connection: {e}")
+
+    async def _return_status(self):
+        return await self.return_status()
 
     async def _shutdown(self):
         # Clearing self.running retires the accept loop and any live
