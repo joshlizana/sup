@@ -77,8 +77,10 @@ documented `uv` command, with no manual steps.
       DIDs on a 27M-row store decode outside 2022 to now from well-formed
       TIDs. `tid_us` returns 0 for those, and the health probe reads past
       them ([ADR-0018](adr/0018-event-time-from-commit-rev.md))
-- [ ] `status` command on ingest's `Controller`: rate, connection state, queue
-      depth, worker count ([ADR-0015](adr/0015-tui-as-control-plane-client.md))
+- [x] `status` command on ingest's `Controller`, answered by
+      `Ingester.return_status`: throughput, reader count, writer state, and
+      all three queue depths, as a plain dict
+      ([ADR-0015](adr/0015-tui-as-control-plane-client.md))
 - [x] Re-measure throughput as distinct events per second. With duplicates at
       0.56% the two are now the same figure: the live tail settles at 230-250
       events/sec, matching the 250/s median

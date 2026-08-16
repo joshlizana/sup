@@ -19,7 +19,7 @@ class Ingester:
     def __init__(self):
         self.running: bool = True
         self.paused: bool = False
-        self.controller: Controller = Controller("ingest", self.quiesce, self.resume, self.shutdown)
+        self.controller: Controller = Controller("ingest", self.quiesce, self.resume, self.shutdown, self.return_status)
         self.auditor: GapAuditor = GapAuditor()
         self.readers: list[Reader] = []
         self.reader_tasks: list[asyncio.Task] = []
@@ -93,6 +93,29 @@ class Ingester:
         await self.drain()
         self.log.info("Service shutdown complete")
 
+
+    async def return_status(self):
+        """Return a dict of the current status of the service.
+
+        Answers the control plane's `status` command
+        ([ADR-0015](../../../docs/adr/0015-tui-as-control-plane-client.md)).
+        `Controller` hands each connection's handler to the event loop that
+        owns this service, so reading queue depths and reader state here
+        needs no synchronisation.
+        """
+        throughput = sum(reader.throughput for reader in self.readers)
+        readers = sum(1 for reader in self.readers if reader.reading)
+        writer = "Up" if (self.writer_task is not None and not self.writer_task.done()) else "Down"
+        return {
+            "readers": f"{readers}/{len(self.readers)}",
+            "throughput": f"{throughput} events/sec",
+            "backfill": self.backfill_queue.qsize(),
+            "writer": writer,
+            "msgq": self.message_queue.qsize(),
+            "dlq": self.dlq_queue.qsize(),
+            "paused": self.paused,
+            "running": self.running
+        }
 
 
     async def quiesce(self):
