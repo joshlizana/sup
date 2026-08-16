@@ -78,9 +78,14 @@ documented `uv` command, with no manual steps.
       ([ADR-0018](adr/0018-event-time-from-commit-rev.md))
 - [ ] `status` command on ingest's `Controller`: rate, connection state, queue
       depth, worker count ([ADR-0015](adr/0015-tui-as-control-plane-client.md))
-- [ ] Re-measure throughput as distinct events per second; every rate
-      recorded so far counts rows written, most of them re-reads after
-      catch-up
+- [x] Re-measure throughput as distinct events per second. With duplicates at
+      0.56% the two are now the same figure: the live tail settles at 230-250
+      events/sec, matching the 250/s median
+      ([ADR-0014](adr/0014-mart-grain-and-transform-cadence.md)), while
+      backfill reads 32,000-38,000/s of real history rather than re-reads
+- [ ] A second instance refuses with an unhandled `RuntimeError`, so the
+      terminal gets a traceback where ADR-0007 asks for a clear error. Exit
+      code is already 1
 - [ ] Retention: ingest prunes `events` below the position transform
       publishes ([ADR-0013](adr/0013-service-owned-pruning.md)). Lands with
       M2; until then rows accumulate at ~21 GB/day
@@ -101,18 +106,27 @@ Demonstrated:
 - [x] A dropped connection re-queues the unread remainder rather than the
       whole range
 
+- [x] `kill -9` mid-stream: `quick_check` returns `ok` on the 21 GB store, and
+      the last durable event sits 7.9 s behind the kill — inside the ~41 s
+      that 10,000 queued messages represent at the live rate
+      ([ADR-0009](adr/0009-bounded-write-queues.md)). The next start's audit
+      re-backfills that window, so the loss is recovered rather than merely
+      bounded
+- [x] Stop for a known duration, restart, and the audit reports a gap of that
+      size at that position (TDD-0003 §1). Confirmed twice: a 14-minute clean
+      stop and a 5.9-minute crash gap, each detected to the second and
+      widened by the standard ten seconds at each edge
+- [x] A second `sup ingest` against the same data directory refuses and exits
+      non-zero ([ADR-0007](adr/0007-control-plane-ipc.md))
+- [x] `kill -9` leaves a stale lock file and socket; the next start acquires
+      the `flock` anyway and clears them (ADR-0007)
+- [x] SIGTERM drains readers before the writer, then releases the listener and
+      removes the socket ([TDD-0002](tdd/0002-cli-orchestration.md) §6)
+
 Untested:
 
-- [ ] `kill -9` mid-stream, then restart: no corruption, and a loss window
-      bounded by the queues' `maxsize` plus the in-flight `executemany`
-      ([ADR-0009](adr/0009-bounded-write-queues.md))
-- [ ] Stop for a known duration, restart, and confirm the audit reports a gap
-      of that size at that position (TDD-0003 §1)
-- [ ] A second `sup ingest` against the same data directory refuses and exits
-      non-zero ([ADR-0007](adr/0007-control-plane-ipc.md))
-- [ ] `kill -9` leaves a stale lock file and socket; the next start acquires
-      the `flock` anyway and clears them (ADR-0007)
-- [ ] An unreachable endpoint backs off rather than reconnecting in a loop
+- [ ] An unreachable endpoint backs off rather than reconnecting in a loop.
+      Every run so far has had all six endpoints up
 - [ ] The DLQ receives a row. It has stayed empty on every run, so the path
       is unexercised rather than proven
       ([ADR-0011](adr/0011-record-validation-and-routing-in-the-mart.md) makes
