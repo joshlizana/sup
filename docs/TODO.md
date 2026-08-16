@@ -159,6 +159,11 @@ Demonstrated:
 - [ ] Ingest prunes `events` below that position, holding a working buffer
       rather than a window (ADR-0013). Until it lands the raw store
       accumulates at ~21 GB/day
+- [ ] Mirror into `gap_index` on a cadence, not only at startup. `GapAuditor`
+      records coverage once per start and is released; pruning `events`
+      against that would delete rows the index never recorded, and the loss
+      is permanent outside the roll-back window. Ingest must mirror before it
+      prunes ([ADR-0013](adr/0013-service-owned-pruning.md))
 - [ ] Prune `gap_index` on the retention floor — the durable coverage record
       once `events` is a buffer, growing ~400 MB/day unpruned (ADR-0013)
 - [ ] Purge mart rows past the retention floor
