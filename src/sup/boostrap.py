@@ -12,7 +12,9 @@ from sup.db import SQLiteClient, DuckDBClient
 # STRICT enforces declared column types on write. `events` is append-only,
 # keyed solely on its autoincrement pk and carrying no secondary index; the
 # M2 transform deduplicates on (did, rkey, rev). See ADR-0010.
-RAW_SCHEMA = """CREATE TABLE IF NOT EXISTS events (
+RAW_SCHEMA = """PRAGMA auto_vacuum=INCREMENTAL;
+                PRAGMA journal_mode=WAL;
+            CREATE TABLE IF NOT EXISTS events (
                 pk INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp INTEGER NOT NULL,
                 did TEXT NOT NULL,

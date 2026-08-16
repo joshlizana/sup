@@ -29,7 +29,6 @@ class SQLiteClient:
         self.log.info("Initializing SQLite client")
         self.conn = await aiosqlite.connect(self.data_path)
         self.cursor = await self.conn.cursor()
-        await self.cursor.execute("PRAGMA journal_mode=WAL;")
         await self.cursor.execute("PRAGMA synchronous=NORMAL;")
         return self
 

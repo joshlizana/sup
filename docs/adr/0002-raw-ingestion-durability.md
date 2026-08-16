@@ -21,9 +21,9 @@ Accepted
 
 ## Decision
 
-The raw store is one SQLite database in WAL mode at `synchronous=NORMAL`,
-written by a batched writer that commits every N messages or X ms, whichever
-comes first. The mart is DuckLake, its catalog a SQLite database in a
+The raw store is one SQLite database in WAL mode at `synchronous=NORMAL`
+with `auto_vacuum=INCREMENTAL`, written by a batched writer that commits
+every N messages or X ms, whichever comes first. The mart is DuckLake, its catalog a SQLite database in a
 separate file. The transform reads the raw store through `aiosqlite`,
 `WHERE pk > watermark` against a monotonic watermark column and a small state
 table, and writes out through DuckLake. Nothing reads the raw store through
@@ -124,3 +124,13 @@ Accepted costs:
   wrong, the mart drifts silently rather than failing.
 - The raw store's connection carries the 5-second `busy_timeout` default from
   `sqlite3.connect`.
+- **`auto_vacuum` is settable only on an empty database.** SQLite ignores the
+  pragma once a table exists, without erroring, so it goes in the schema
+  script ahead of the first `CREATE TABLE`; a store built without it keeps
+  `NONE` until it is rebuilt. `INCREMENTAL` maintains the pointer map rather
+  than freeing anything — pages return to the filesystem when something calls
+  `incremental_vacuum`, which is the prune's job
+  ([ADR-0013](0013-service-owned-pruning.md)).
+- `journal_mode` persists in the database header and `synchronous` does not,
+  so WAL is set once at creation and `synchronous=NORMAL` on every
+  connection.
