@@ -157,16 +157,15 @@ Demonstrated:
 - [ ] Watermark column + state table for incremental runs
 - [ ] Publish the committed position into the mart, where the transform is
       already the only writer, for ingest to read through DuckDB (ADR-0013).
-      Prerequisite for the prune — nothing can be deleted until something
-      says what the transform has taken
+      Prerequisite for the prune
 - [ ] Ingest prunes `events` below that position, holding a working buffer
       rather than a window (ADR-0013). Until it lands the raw store
       accumulates at ~21 GB/day
-- [ ] Mirror into `gap_index` on a cadence, not only at startup. `GapAuditor`
-      records coverage once per start and is released; pruning `events`
-      against that would delete rows the index never recorded, and the loss
-      is permanent outside the roll-back window. Ingest must mirror before it
-      prunes ([ADR-0013](adr/0013-service-owned-pruning.md))
+- [ ] Mirror into `gap_index` on a cadence, not only at startup.
+      `GapAuditor` records coverage once per start, so pruning against it
+      deletes rows the index never recorded — permanently, outside the
+      roll-back window. Ingest mirrors before it prunes
+      ([ADR-0013](adr/0013-service-owned-pruning.md))
 - [ ] Prune `gap_index` on the retention floor — the durable coverage record
       once `events` is a buffer, growing ~400 MB/day unpruned (ADR-0013)
 - [ ] Purge mart rows past the retention floor

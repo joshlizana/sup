@@ -25,8 +25,7 @@ Accepted
 
 The transform publishes its committed watermark into the mart; ingest reads
 it from there through DuckDB and prunes below it on its own cadence. Each
-store keeps exactly one writer, and ingest gains a read on the mart rather
-than the transform gaining a write on the raw store.
+store keeps exactly one writer, and ingest's access to the mart is a read.
 
 `gap_index` becomes the durable record of what was ingested. It already fills
 incrementally (`INSERT ... WHERE pk > (SELECT MAX(pk) FROM gap_index)`),
