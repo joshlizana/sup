@@ -109,9 +109,11 @@ Accepted costs:
 
 - DuckLake and `sqlite` ship as DuckDB extensions fetched on first use, 36 MB
   and 35 MB into `~/.duckdb/`. The first run must reach
-  `extensions.duckdb.org` as well as Jetstream, the files outlive
-  `uv tool uninstall`, and installing both at bootstrap surfaces a blocked
-  fetch at startup.
+  `extensions.duckdb.org` as well as Jetstream, and the files outlive
+  `uv tool uninstall`. Installing both at bootstrap surfaces a blocked fetch
+  at startup and costs nothing afterwards: `bootstrap()` runs in 12.6 ms
+  against a 22 GB store, almost all of it opening the DuckDB connection,
+  with the repeat installs themselves ~0.1 ms.
 - Pruning must be ordered strictly after a verified DuckLake commit. Pruning
   before it is a data-loss path.
 - The watermark state table is new state that must be correct; if it is
