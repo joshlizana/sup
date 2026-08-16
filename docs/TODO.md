@@ -133,7 +133,11 @@ Demonstrated:
 
 - [x] `INSTALL ducklake` / `INSTALL sqlite` in `bootstrap()`
       ([ADR-0002](adr/0002-raw-ingestion-durability.md))
-- [ ] DuckLake mart with a SQLite catalog, in its own file
+- [ ] Mart schema created by the transform, the only writer: five
+      per-collection tables plus the reject table. `ATTACH` creates the
+      SQLite catalog itself, so `bootstrap()` stays out of it — it runs in
+      every process, and ingest and the dashboard have no business holding
+      a mart handle ([ADR-0015](adr/0015-tui-as-control-plane-client.md))
 - [ ] Transform reads the raw store through `aiosqlite` and writes to
       DuckLake, with the Pydantic validation and routing stage between
       ([ADR-0002](adr/0002-raw-ingestion-durability.md))
