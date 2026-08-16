@@ -101,7 +101,7 @@ class Reader:
         queue and a range this endpoint cannot progress.
         """
         # Probed once per Reader lifetime, then cached.
-        async with asyncio.timeout(15):
+        async with asyncio.timeout(20):
             if self.running and (self.retention is None or self.endpoint_health is None):
                 try:
                     async with JetstreamClient(self.endpoint[0], 0) as client:
@@ -109,7 +109,6 @@ class Reader:
                     self.log.info(f"Retention: {displayTime(self.retention)}")
                 except Exception as e:
                     self.log.error(f"Error occurred while fetching endpoint retention: {e}")
-                    await asyncio.sleep(1)
                     return
 
         # Ranges below this endpoint's retention floor go back into the
