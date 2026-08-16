@@ -83,7 +83,11 @@ a rowid range needs.
 Ingest's gap audit does attach `raw.db` through DuckDB, to mirror
 `(pk, time_us)` into `gap_index`. It runs to completion before any reader
 starts, so nothing is writing while it scans — the ordering is what makes it
-safe, not the reader.
+safe, not the reader. It pays the scanner's cost regardless: finding the
+rows above the last mirrored `pk` takes 4 to 7.5 s against a 22 GB store
+**even when there are none**, where `sqlite3` answers the same predicate in
+under a millisecond off the rowid index. That, not the gap scan, is what
+dominates a startup audit.
 
 **So the transform reads through SQLite**, which costs nothing it was not
 already paying. The rows have to be materialized regardless — Pydantic
