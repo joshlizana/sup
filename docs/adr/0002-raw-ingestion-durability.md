@@ -26,7 +26,8 @@ written by a batched writer that commits every N messages or X ms, whichever
 comes first. The mart is DuckLake, its catalog a SQLite database in a
 separate file. The transform reads the raw store through `aiosqlite`,
 `WHERE pk > watermark` against a monotonic watermark column and a small state
-table, and writes out through DuckLake. DuckDB never attaches the raw store.
+table, and writes out through DuckLake, never reaching the raw store through
+DuckDB.
 
 Retention is [ADR-0012](0012-rolling-retention-window.md) and
 [ADR-0013](0013-service-owned-pruning.md). Cross-process concurrency is
@@ -79,10 +80,10 @@ bounded read succeeding under 35k rows/s, 200x the rate that fails here. The
 450x time difference points at the scanner reading far more of the file than
 a rowid range needs.
 
-Ingest's own gap audit is the exception that proves the rule: it attaches
-`raw.db` through DuckDB to mirror `(pk, time_us)` into `gap_index`, and it is
-safe because it completes before any reader starts, so nothing is writing
-while it scans.
+Ingest's gap audit does attach `raw.db` through DuckDB, to mirror
+`(pk, time_us)` into `gap_index`. It runs to completion before any reader
+starts, so nothing is writing while it scans — the ordering is what makes it
+safe, not the reader.
 
 **So the transform reads through SQLite**, which costs nothing it was not
 already paying. The rows have to be materialized regardless — Pydantic
