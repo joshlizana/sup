@@ -60,9 +60,12 @@ Accepted costs:
   and leaves a permanent hole outside it.
 - **`gap_index` needs its own prune.** It costs 12 to 15 bytes per event —
   86 MB at 7.1M rows, 733 MB at 48M — so a day of ingest is roughly 400 MB
-  at current volume. Rows below the retention floor cannot affect gap
-  detection, so the floor is the prune condition. It is the third store with
-  a retention rule and the one whose growth stays invisible from the UI.
+  at current volume, and every start pays to scan it: the windowed `LAG`
+  takes 7.74 s over 28,996,394 rows, about 0.27 µs per row, with nothing to
+  mirror. Rows below the retention floor cannot affect gap detection, so the
+  floor is the prune condition. It is the third store with a retention rule,
+  the one whose growth stays invisible from the UI, and the one whose growth
+  an operator feels at every startup.
 - **The position table is a contract between two services.** Ingest prunes on
   what transform wrote. A stopped transform holds the prune and the raw store
   grows until it resumes, costing disk. A transform publishing a position
