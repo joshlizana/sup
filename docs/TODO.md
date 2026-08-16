@@ -105,7 +105,6 @@ Demonstrated:
       ([ADR-0019](adr/0019-endpoint-witness-lag-screening.md))
 - [x] A dropped connection re-queues the unread remainder rather than the
       whole range
-
 - [x] `kill -9` mid-stream: `quick_check` returns `ok` on the 21 GB store, and
       the last durable event sits 7.9 s behind the kill — inside the ~41 s
       that 10,000 queued messages represent at the live rate
@@ -123,13 +122,15 @@ Demonstrated:
 - [x] SIGTERM drains readers before the writer, then releases the listener and
       removes the socket ([TDD-0002](tdd/0002-cli-orchestration.md) §6)
 
+- [x] The DLQ takes a row when one fails to parse, seen on an earlier run. It
+      stays empty on a healthy one, so its rate is an instrument rather than
+      a defect count
+      ([ADR-0011](adr/0011-record-validation-and-routing-in-the-mart.md))
+
 Untested:
 
 - [ ] An unreachable endpoint backs off rather than reconnecting in a loop.
       Every run so far has had all six endpoints up
-- [x] The DLQ receives a row, on an earlier run. It stays empty on a healthy
-      one, so its rate is an instrument rather than a defect count
-      ([ADR-0011](adr/0011-record-validation-and-routing-in-the-mart.md))
 
 ## M2: Minimal mart transform
 
