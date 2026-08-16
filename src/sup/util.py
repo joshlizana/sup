@@ -31,8 +31,9 @@ class Identity(logging.LoggerAdapter):
     def process(self, msg, kwargs):
         """Prefix the message with the identifier and set `id` on the
         `LogRecord`, where a formatter can reach it as `%(id)s`."""
+        now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S %Z")
         kwargs["extra"] = self.extra
-        return f"[{self.extra['id']}] {msg}", kwargs
+        return f" {now_utc} [{self.extra['id']}] {msg}", kwargs
 
 
 def displayTime(timestamp: int):
@@ -46,3 +47,10 @@ def displayTime(timestamp: int):
     epoch_seconds = timestamp / 1_000_000
     dt_utc = datetime.fromtimestamp(epoch_seconds, tz=timezone.utc)
     return dt_utc.strftime("%Y-%m-%d %H:%M:%S %Z")
+
+def tid_us(tid: str) -> int:
+    ALPHA = "234567abcdefghijklmnopqrstuvwxyz"
+    v = 0
+    for c in tid:
+        v = v * 32 + ALPHA.index(c)
+    return v >> 10

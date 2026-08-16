@@ -2,8 +2,20 @@
 dashboard) attach to `app` as they're built."""
 
 import typer
+import asyncio
+from sup.services.ingest.ingest import Ingester
 
 app = typer.Typer()
+
+@app.command()
+def ingest():
+
+    async def _run():
+        async with Ingester() as ingester:
+            await ingester.run()
+
+    asyncio.run(_run())
+
 
 @app.callback(invoke_without_command=True)
 def sup(ctx: typer.Context) -> None:

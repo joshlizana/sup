@@ -17,7 +17,7 @@ INSERT_DLQ = "INSERT into dlq (pk, timestamp, error, payload) VALUES (null, ?, ?
 
 # `events` carries no constraint to resolve against, so a failing insert
 # raises (ADR-0010).
-INSERT_EVENT = "INSERT into events (pk, timestamp, did, rkey, rev, time_us, payload) VALUES (null, ?, ?, ?, ?, ?, ?)"
+INSERT_EVENT = "INSERT into events (pk, timestamp, did, rkey, rev, time_us, endpoint, tid_us, payload) VALUES (null, ?, ?, ?, ?, ?, ?, ?, ?)"
 
 class Writer:
     def __init__(self, message_queue: asyncio.Queue, dlq_queue: asyncio.Queue):

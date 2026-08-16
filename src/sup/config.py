@@ -18,13 +18,13 @@ class Config(BaseModel):
     default_path: Path = PlatformDirs("sup", ensure_exists=True).user_data_path
 
     # Every endpoint carries the same firehose; readers take disjoint time
-    # ranges across them.
-    endpoints: list[str] = ["wss://jetstream1.us-east.bsky.network/subscribe",
-                            "wss://jetstream2.us-east.bsky.network/subscribe",
-                            "wss://jetstream1.us-west.bsky.network/subscribe",
-                            "wss://jetstream2.us-west.bsky.network/subscribe",
-                            "wss://jetstream.us-west.bsky.network/subscribe",
-                            "wss://jetstream.us-east.bsky.network/subscribe"]
+    # ranges across them. - (endpoint, v2)
+    endpoints: list[tuple[str, int, int]] = [("wss://jetstream1.us-east.bsky.network/subscribe", 0),
+                                            ("wss://jetstream2.us-east.bsky.network/subscribe", 0),
+                                            ("wss://jetstream1.us-west.bsky.network/subscribe", 0),
+                                            ("wss://jetstream2.us-west.bsky.network/subscribe", 0),
+                                            ("wss://jetstream.us-west.bsky.network/subscribe", 1),
+                                            ("wss://jetstream.us-east.bsky.network/subscribe", 1)]
 
     @computed_field
     @property

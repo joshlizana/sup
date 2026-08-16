@@ -42,7 +42,7 @@ class Ingester:
         self.log.info("Acquiring writer")
         await self.writer.__aenter__()
         self.readers = [await Reader(endpoint, self.backfill_queue, self.message_queue, self.dlq_queue).__aenter__() for endpoint in Config().endpoints]
-        self.log.info(f"Created readers for {len(self.readers)} endpoints")
+        self.log.info(f"Created readers for {len(Config().endpoints)} endpoints")
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -83,9 +83,10 @@ class Ingester:
         while self.running:
             cycles += 1
             if cycles % 100 == 0:
-                readers = sum(not t.done() for t in self.reader_tasks)
+                throughput = sum(reader.throughput for reader in self.readers)
+                readers = sum(1 for reader in self.readers if reader.reading)
                 writer = "Up" if (self.writer_task is not None and not self.writer_task.done()) else "Down"
-                self.log.info(f"Status: readers:{readers}/{len(self.readers)} backfill:{self.backfill_queue.qsize()} writer:{writer} msgq:{self.message_queue.qsize()} dlq:{self.dlq_queue.qsize()}")
+                self.log.info(f"Status: readers:{readers}/{len(self.readers)} throughput:{throughput} events/sec backfill:{self.backfill_queue.qsize()} writer:{writer} msgq:{self.message_queue.qsize()} dlq:{self.dlq_queue.qsize()}")
 
             await asyncio.sleep(0.1)
 

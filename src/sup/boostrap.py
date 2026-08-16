@@ -1,9 +1,10 @@
-"""Database schema creation, run once per process at startup.
+"""Schema creation and DuckDB extension install, run once per process at
+startup.
 
 Two stores, each with its own file under the shared data directory
 (ADR-0002): `raw.db` holds durable ingested events in SQLite, and
 `index.db` holds the DuckDB gap index the audit scans. Every statement is
-`IF NOT EXISTS`, making startup idempotent across restarts.
+idempotent, so startup repeats safely across restarts.
 """
 
 from sup.db import SQLiteClient, DuckDBClient
@@ -18,6 +19,8 @@ RAW_SCHEMA = """CREATE TABLE IF NOT EXISTS events (
                 rkey TEXT NOT NULL,
                 rev TEXT NOT NULL,
                 time_us INTEGER NOT NULL,
+                endpoint TEXT NOT NULL,
+                tid_us INTEGER NOT NULL,
                 payload TEXT NOT NULL
             ) STRICT;
 
@@ -38,8 +41,15 @@ INDEX_SCHEMA = """CREATE TABLE IF NOT EXISTS gap_index (
 );
 """
 async def bootstrap():
-    """Create both schemas, opening and closing each connection in turn."""
+    """Create both schemas and install the mart's extensions, opening and
+    closing each connection in turn."""
     async with SQLiteClient("raw.db") as client:
         await client.executescript(RAW_SCHEMA)
     async with DuckDBClient("index.db") as client:
         await client.conn.execute(INDEX_SCHEMA)
+        # Repository extensions, downloaded into `~/.duckdb` on first use
+        # and raising `IOException` when that fetch fails. Reinstalling an
+        # extension already present takes about a millisecond and reaches
+        # no network.
+        await client.conn.execute("INSTALL ducklake")
+        await client.conn.execute("INSTALL sqlite")

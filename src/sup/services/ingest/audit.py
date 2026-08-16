@@ -11,7 +11,7 @@ fail.
 """
 
 from sup.config import Config
-from sup.util import register
+from sup.util import register, displayTime
 from sup.db import DuckDBClient
 from sup.services.ingest.jetstream import JetstreamClient
 import logging
@@ -87,13 +87,13 @@ class GapAuditor:
         no endpoint answers.
         """
         async with asyncio.TaskGroup() as tg:
-            tasks = [tg.create_task(self._probe(endpoint)) for endpoint in self.endpoints]
+            tasks = [tg.create_task(self._probe(endpoint[0])) for endpoint in self.endpoints]
 
         results = [task.result() for task in tasks]
         filtered_results = [r for r in results if r is not None]
         oldest_retention = min(filtered_results) if filtered_results else None
         self.retention_floor = oldest_retention if oldest_retention is not None and oldest_retention > self.retention_floor else self.retention_floor
-        self.log.info(f"Updated retention floor to {self.retention_floor}")
+        self.log.info(f"Updated retention floor to {displayTime(self.retention_floor)}")
 
     async def _probe(self, endpoint: str):
         """Return one endpoint's retention floor, or None on any failure or
@@ -101,7 +101,7 @@ class GapAuditor:
         try:
             async with asyncio.timeout(15):
                 async with JetstreamClient(endpoint, 0) as client:
-                    return await client.get_endpoint_retention()
+                    return (await client.get_endpoint_health())[0]
         except Exception as e:
             self.log.error(f"Error probing endpoint {endpoint}: {e}")
             return None
