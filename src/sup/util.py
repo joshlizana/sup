@@ -7,8 +7,9 @@ readable UTC timestamp.
 
 import sys
 import uuid
-from datetime import datetime, timezone
+import time
 import logging
+from datetime import datetime, timezone
 
 def register(logger, class_name):
     """Return an `Identity` adapter tagged for one instance.
@@ -49,8 +50,19 @@ def displayTime(timestamp: int):
     return dt_utc.strftime("%Y-%m-%d %H:%M:%S %Z")
 
 def tid_us(tid: str) -> int:
+    """Decode a TID to microseconds, or 0 when the result is implausible.
+
+    A TID is 13 base32-sortable characters carrying 53 bits of
+    microseconds and a 10-bit clock identifier. Some implementations mint
+    `rev` as a counter rather than a clock, so a well-formed TID can
+    decode to seconds after the epoch (ADR-0018). Anything outside 2022
+    to now returns 0, which callers treat as "no usable time" rather than
+    as a timestamp.
+    """
     ALPHA = "234567abcdefghijklmnopqrstuvwxyz"
     v = 0
     for c in tid:
         v = v * 32 + ALPHA.index(c)
-    return v >> 10
+    tid_us = v >> 10
+
+    return tid_us if tid_us > 1_640_995_200_000_000 and tid_us < int(time.time() * 1_000_000) + 10_000_000 else 0

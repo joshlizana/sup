@@ -64,9 +64,11 @@ class JetstreamClient:
 
         `retention` is the `time_us` of the oldest event served; `health`
         is 1 when that event's witness lag is within tolerance and 0
-        otherwise, including when the message fails to parse. Reads until
-        the first commit message, then closes. Requires the client to have
-        been constructed with cursor 0.
+        otherwise. Reads until a commit message whose `rev` decodes to a
+        plausible time, since a counter-minted one would fail the lag
+        check on arithmetic rather than on lag (ADR-0018, ADR-0019), then
+        closes. Raises if a message fails to parse. Requires the client to
+        have been constructed with cursor 0.
         """
         found_retention = False
         while not found_retention:
@@ -74,15 +76,17 @@ class JetstreamClient:
             try:
                 message = orjson.loads(msg)
                 if message.get("kind") == "commit":
-                    await self.ws.close()
 
-                    found_retention = True
                     commit = message.get("commit")
                     rev = commit.get("rev")
                     time_us = message.get("time_us")
                     rev_us = tid_us(rev)
                     health = 1 if time_us - rev_us < 10_000_000 else 0
-                    return (time_us, health)
+                    
+                    if rev_us != 0:
+                        found_retention = True
+                        await self.ws.close()
+                        return (time_us, health)
             except Exception:
                 await self.ws.close()
                 raise

@@ -73,12 +73,15 @@ documented `uv` command, with no manual steps.
 - [x] Readers claim no work when their endpoint's witness lag exceeds ten
       seconds, measured during the retention probe they already run
       ([ADR-0019](adr/0019-endpoint-witness-lag-screening.md))
-- [ ] Guard `tid_us` against implausible values — 0.2351% of rows decode
-      outside 2020-2030 from well-formed TIDs, 71,843 rows across 8,474 DIDs
-      on a 27M-row store ([ADR-0018](adr/0018-event-time-from-commit-rev.md)).
-      Wanted before the mart uses it as a time axis, and already reachable
-      through ADR-0019's health probe, which benches an endpoint when its
-      probe message carries one
+- [x] Guard `tid_us` against implausible values — 71,843 rows across 8,474
+      DIDs on a 27M-row store decode outside 2022 to now from well-formed
+      TIDs. `tid_us` returns 0 for those, and the health probe reads past
+      them ([ADR-0018](adr/0018-event-time-from-commit-rev.md))
+- [ ] Decide what the mart does with a zero `tid_us`: fall back to `time_us`,
+      reject the row, or carry a null event time. 0 reads as 1970 to anything
+      treating it as a timestamp, and a retention-keyed purge would delete
+      those rows on the first cycle
+      ([ADR-0012](adr/0012-rolling-retention-window.md))
 - [ ] `status` command on ingest's `Controller`: rate, connection state, queue
       depth, worker count ([ADR-0015](adr/0015-tui-as-control-plane-client.md))
 - [x] Re-measure throughput as distinct events per second. With duplicates at

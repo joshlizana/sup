@@ -67,9 +67,10 @@ Accepted costs:
 - **The verdict rests on the probe's first commit message.** The failure it
   screens for affects 100% of rows at four orders of magnitude past the
   threshold, so one sample resolves it. The comparison is only as good as the
-  decode, and 0.2351% of `rev` values are counters rather than clocks
-  ([ADR-0018](0018-event-time-from-commit-rev.md)), so a probe landing on one
-  benches a healthy endpoint until that guard exists.
+  decode, and 0.2351% of `rev` values are counters rather than clocks, so the
+  probe reads past any message whose `rev` decodes implausibly
+  ([ADR-0018](0018-event-time-from-commit-rev.md)) rather than failing an
+  endpoint on the arithmetic.
 - Losing an endpoint costs little throughput: the pool already reads near the
   ceiling endpoint capacity sets, and the failing endpoint contributed 8.9%
   of rows, most of them unusable.

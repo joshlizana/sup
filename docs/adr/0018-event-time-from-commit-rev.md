@@ -55,11 +55,15 @@ Accepted costs:
   13-character `rev`, and values run consecutively across a sub-second span,
   so those implementations mint `rev` as a counter rather than a clock. The
   decode cannot detect this; only a range check can.
-- **The guard has a live consumer before the mart.**
-  [ADR-0019](0019-endpoint-witness-lag-screening.md)'s probe compares a
-  message's `time_us` against `tid_us(rev)`, so a probe landing on a
-  counter-minted `rev` misses the threshold by nine orders of magnitude and
-  benches a healthy endpoint for the run.
+- **`sup.util.tid_us` returns 0 outside 2022 to now.** The lower bound sits
+  before the network existed and fifty years above the failures; the upper
+  bound is the local clock, so it needs no revisiting as time passes. A
+  counter-minted `rev` becomes a detectable sentinel rather than a 1970
+  timestamp, and [ADR-0019](0019-endpoint-witness-lag-screening.md)'s probe
+  reads past such a message instead of judging an endpoint on it.
+- **What the mart does with a zero is open.** Falling back to `time_us`,
+  rejecting the row, or carrying a null event time all cost something
+  different, and 0 is still 1970 to anything that reads it as a timestamp.
 - **`tid_us` is on the write path for every row.** A `rev` outside the
   alphabet raises inside `process_message`'s `try`, which sends an otherwise
   valid message to the DLQ. All 48,034,622 rows measured carry exactly 13
