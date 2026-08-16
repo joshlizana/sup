@@ -27,8 +27,9 @@ Accepted
 
 ## Decision
 
-**Pydantic, in the M2 transform.** The transform runs as a DuckDB read, a
-Python validation and routing stage, and a DuckLake write.
+**Pydantic, in the M2 transform.** The transform runs as an `aiosqlite`
+read, a Python validation and routing stage, and a DuckLake write
+([ADR-0002](0002-raw-ingestion-durability.md)).
 
 **Routing keys on `commit.collection`, not the matched model**, because 3.83%
 of rows are deletes carrying no record, so the union yields `None` and cannot
@@ -103,6 +104,9 @@ Accepted costs:
   query. `(CASE WHEN json_valid(payload) THEN payload ELSE '{}' END)` works.
   `events` is unaffected, since its payloads parsed through `orjson` before
   being queued.
-- Revisit trigger: if the transform becomes the bottleneck, SQL's 1.9x is on
-  the table, and the twelve-case port that measured it is a known-good
-  starting point.
+- SQL's 1.9x is no longer recoverable. It rested on the data never leaving
+  the engine, and the transform reads through SQLite now
+  ([ADR-0002](0002-raw-ingestion-durability.md)), so the rows are already
+  materialized before any validation could run. Revisiting means moving the
+  read back to DuckDB first, which is the failing path that decision exists
+  to avoid.

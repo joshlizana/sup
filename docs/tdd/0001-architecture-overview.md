@@ -85,9 +85,9 @@ degrades as the table grows
 
 ### [3] Mart transform
 
-A DuckDB process that `ATTACH`es the raw store and a separate SQLite file used
-as the DuckLake catalog, then writes into DuckLake. The path is a SQL read, a
-Pydantic validation and routing stage, and a DuckLake write: records are
+A process that reads the raw store through `aiosqlite` and writes into
+DuckLake, whose catalog is a separate SQLite file. The path is a SQLite read,
+a Pydantic validation and routing stage, and a DuckLake write: records are
 validated through `models.py`'s discriminated union and routed to
 per-collection tables on `commit.collection`
 ([ADR-0011](../adr/0011-record-validation-and-routing-in-the-mart.md)).
@@ -95,8 +95,9 @@ Routing keys on the collection rather than the matched model because deletes —
 3.8% of rows — carry no record.
 
 It reads incrementally via a watermark on the raw store's PK and
-**deduplicates on `(did, rkey, rev)`** as it goes. Staying behind the write
-frontier is also what makes concurrent reads safe (ADR-0002).
+**deduplicates on `(did, rkey, rev)`** as it goes. Reading through SQLite
+rather than DuckDB is what makes those reads reliable while ingest writes
+(ADR-0002).
 
 A mart row is one validated event and every revision is kept. Event time comes
 from the decoded `rev`, not `time_us`
@@ -138,11 +139,11 @@ handful of focused views, with queries wrapped in `@st.cache_data`.
   ([ADR-0014](../adr/0014-mart-grain-and-transform-cadence.md)).
 - Orchestration remains proposed rather than built
   ([TDD-0002](0002-cli-orchestration.md)).
-- **Open:** cross-process reads while ingest writes succeed through SQLite's
-  own connection and fail intermittently through DuckDB's `sqlite_scanner`,
-  at any distance behind the writer
-  ([ADR-0002](../adr/0002-raw-ingestion-durability.md)). The mart's read path
-  goes through DuckDB.
+- **Resolved:** cross-process reads while ingest writes succeed through
+  SQLite's own connection and fail intermittently through DuckDB's
+  `sqlite_scanner` at any distance behind the writer, so the transform reads
+  through `aiosqlite` and DuckLake takes only the write
+  ([ADR-0002](../adr/0002-raw-ingestion-durability.md)).
 - **Resolved:** the 46.19% duplicate share was the live tail replaying against
   endpoints that clamp recent cursors. Defended in
   [ADR-0020](../adr/0020-live-tail-cursor-clamping.md) and measured at 0.56%

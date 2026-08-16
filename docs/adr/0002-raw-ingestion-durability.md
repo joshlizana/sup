@@ -24,9 +24,9 @@ Accepted
 The raw store is one SQLite database in WAL mode at `synchronous=NORMAL`,
 written by a batched writer that commits every N messages or X ms, whichever
 comes first. The mart is DuckLake, its catalog a SQLite database in a
-separate file, built by DuckDB `ATTACH`ing the raw store and reading
-`WHERE > watermark` against a monotonic watermark column and a small state
-table.
+separate file. The transform reads the raw store through `aiosqlite`,
+`WHERE pk > watermark` against a monotonic watermark column and a small state
+table, and writes out through DuckLake. DuckDB never attaches the raw store.
 
 Retention is [ADR-0012](0012-rolling-retention-window.md) and
 [ADR-0013](0013-service-owned-pruning.md). Cross-process concurrency is
@@ -79,10 +79,15 @@ bounded read succeeding under 35k rows/s, 200x the rate that fails here. The
 450x time difference points at the scanner reading far more of the file than
 a rowid range needs.
 
-**This leaves the mart's read path unresolved.** The transform as designed
-has DuckDB attach the raw store, which is the failing side of that table, and
-[ADR-0014](0014-mart-grain-and-transform-cadence.md)'s watermark bound
-reduces the failure rate rather than eliminating it.
+**So the transform reads through SQLite**, which costs nothing it was not
+already paying. The rows have to be materialized regardless — Pydantic
+validates them row by row and routes them into per-collection arrays
+([ADR-0011](0011-record-validation-and-routing-in-the-mart.md)) — so keeping
+them inside DuckDB was never available. Measured on the real read, every
+column including payload, `fetchall`'d while ingest wrote: a 15,000-row cycle
+batch ([ADR-0014](0014-mart-grain-and-transform-cadence.md)) takes 0.023 s
+and 8.2 MB, and 100,000 rows take 0.172 s and 53.6 MB, both 5/5. DuckLake
+still takes the write.
 
 The catalog is SQLite because DuckLake needs one and the alternatives do not
 fit: DuckDB is single-client, and Postgres, the only backend with full

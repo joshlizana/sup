@@ -136,8 +136,9 @@ Untested:
 - [x] `INSTALL ducklake` / `INSTALL sqlite` in `bootstrap()`
       ([ADR-0002](adr/0002-raw-ingestion-durability.md))
 - [ ] DuckLake mart with a SQLite catalog, in its own file
-- [ ] DuckDB `ATTACH`es the raw store and writes to DuckLake, with the
-      Pydantic validation and routing stage between
+- [ ] Transform reads the raw store through `aiosqlite` and writes to
+      DuckLake, with the Pydantic validation and routing stage between
+      ([ADR-0002](adr/0002-raw-ingestion-durability.md))
 - [ ] Deduplicate on `(did, rkey, rev)`
       ([ADR-0010](adr/0010-deduplication-in-the-mart.md))
 - [ ] Validate with Pydantic
