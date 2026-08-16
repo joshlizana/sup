@@ -56,9 +56,9 @@ def tid_us(tid: str) -> int:
     microseconds and a 10-bit clock identifier. Some implementations mint
     `rev` as a counter rather than a clock, so a well-formed TID can
     decode to seconds after the epoch (ADR-0018). Anything outside 2022
-    to ten seconds ahead of now returns 0, which callers treat as "no
-    usable time" rather than as a timestamp. The forward allowance covers
-    a PDS whose clock runs ahead of the machine decoding it.
+    to an hour ahead of now returns 0, which callers treat as "no usable
+    time" rather than as a timestamp. The forward hour covers a PDS whose
+    clock runs ahead of the machine decoding it, measured at up to ~98 s.
     """
     ALPHA = "234567abcdefghijklmnopqrstuvwxyz"
     v = 0
@@ -66,4 +66,4 @@ def tid_us(tid: str) -> int:
         v = v * 32 + ALPHA.index(c)
     tid_us = v >> 10
 
-    return tid_us if tid_us > 1_640_995_200_000_000 and tid_us < int(time.time() * 1_000_000) + 120_000_000_000 else 0
+    return tid_us if tid_us > 1_640_995_200_000_000 and tid_us < int(time.time() * 1_000_000) + 3_600_000_000 else 0
