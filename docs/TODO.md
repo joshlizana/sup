@@ -83,9 +83,11 @@ documented `uv` command, with no manual steps.
       events/sec, matching the 250/s median
       ([ADR-0014](adr/0014-mart-grain-and-transform-cadence.md)), while
       backfill reads 32,000-38,000/s of real history rather than re-reads
-- [ ] A second instance refuses with an unhandled `RuntimeError`, so the
-      terminal gets a traceback where ADR-0007 asks for a clear error. Exit
-      code is already 1
+- [ ] A second instance prints a clear error but exits 0, where ADR-0007 asks
+      for non-zero and the orchestrator needs it to tell a refusal from a
+      healthy start ([ADR-0006](adr/0006-cli-orchestration-model.md)). The
+      catch also spans the whole service run rather than startup, and keys on
+      bare `RuntimeError`, which `connection.py` raises in two places
 - [ ] Retention: ingest prunes `events` below the position transform
       publishes ([ADR-0013](adr/0013-service-owned-pruning.md)). Lands with
       M2; until then rows accumulate at ~21 GB/day
