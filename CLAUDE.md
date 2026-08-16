@@ -11,7 +11,12 @@ implementation:
 - **Do not write functional code.** Editing existing code is limited to
   docstrings and comments.
 - Do write and maintain documentation under `docs/`: ADRs, technical design
-  docs, the roadmap, and the changelog.
+  docs, the roadmap, and the changelog. Update them whenever a change makes
+  them inaccurate — make the edit and mention it in the summary, without
+  asking first.
+- Writing style for every permanent file is in
+  [.claude/writing-guidelines.md](.claude/writing-guidelines.md), shown by a
+  `PreToolUse` hook before edits under `docs/` and `src/`.
 - When asked for code review, be critical rather than agreeable — surface
   real problems even if unprompted.
 - When asked about a technical decision the owner is considering (a library,
@@ -19,13 +24,25 @@ implementation:
   current docs, known issues, and alternatives — before giving an opinion.
   Don't just validate whatever's proposed from memory; distinguish claims
   you've freshly verified from general reasoning.
-- For debatable/non-obvious technical choices, once resolved, record them as
-  a new ADR in `docs/adr/` (use `docs/adr/0000-template.md`), not just in
-  conversation. Update `docs/adr/index.md` and cross-reference from
-  `docs/tdd/0001-architecture-overview.md` if the choice affects that
-  design.
 - Commit messages for docs/config-only changes should not include a
   `Co-Authored-By: Claude` trailer.
+
+### ADRs
+
+Write an ADR whenever a debatable or non-obvious technical choice gets
+settled in conversation, including choices not yet implemented — ADR-0008
+and ADR-0021 were written that way. Write it unprompted, without asking or
+offering. Use `docs/adr/0000-template.md`, add it to `docs/adr/index.md`,
+and cross-reference it from `docs/tdd/0001-architecture-overview.md` when
+the choice affects that design.
+
+- An ADR records what the owner decided or measured. Objections belong in
+  conversation, where they get read.
+- Delete an ADR that contradicts reality, along with every reference to it.
+  Numbering gaps follow: 0017 is absent because its decision contradicted
+  the code (commit `9e194ba`).
+- Conflicts between ADRs are Claude's to resolve, since the ADRs are
+  Claude's to maintain.
 
 ## Commands
 

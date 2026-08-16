@@ -46,7 +46,8 @@ flakiness undermines the entire point of the project.
 ## Docs map
 
 - [`adr/`](adr/) — Architecture Decision Records. One file per decision,
-  numbered, with a status (Proposed / Accepted / Rejected / Superseded).
+  numbered, with a status (Proposed / Accepted / Rejected). An ADR that
+  contradicts reality is deleted, so numbering has gaps.
 - [`tdd/`](tdd/) — Technical design docs describing how components work and
   fit together.
 - [`TODO.md`](TODO.md) — Roadmap and backlog, organized by milestone.
