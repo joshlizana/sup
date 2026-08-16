@@ -30,7 +30,9 @@ Three timestamps reach the raw store, and measurement separates them sharply.
 
 **Event time is `commit.rev`, decoded.** `sup.util.tid_us` performs the
 decode and ingest stores the result as the `tid_us` column, so the mart reads
-a plain integer rather than repeating the decode.
+a plain integer rather than repeating the decode. Where the decode is
+implausible, ingest stores `time_us` in its place, so the column never
+carries a zero or a 1970 timestamp.
 
 `time_us` keeps its existing job as the ingest cursor and nothing more.
 `createdAt` stays available as a column: "when the author claims they posted"
@@ -61,9 +63,11 @@ Accepted costs:
   counter-minted `rev` becomes a detectable sentinel rather than a 1970
   timestamp, and [ADR-0019](0019-endpoint-witness-lag-screening.md)'s probe
   reads past such a message instead of judging an endpoint on it.
-- **What the mart does with a zero is open.** Falling back to `time_us`,
-  rejecting the row, or carrying a null event time all cost something
-  different, and 0 is still 1970 to anything that reads it as a timestamp.
+- **The column mixes two clocks for 0.2351% of rows.** Substituting
+  `time_us` keeps the event and puts its timestamp within the ~0.2 s median
+  witness lag, against losing the row or carrying a null. Nothing downstream
+  can tell a substituted row from a decoded one, so the substitution cannot
+  be measured or excluded from an analysis that would care.
 - **`tid_us` is on the write path for every row.** A `rev` outside the
   alphabet raises inside `process_message`'s `try`, which sends an otherwise
   valid message to the DLQ. All 48,034,622 rows measured carry exactly 13

@@ -149,12 +149,6 @@ Untested:
       ([ADR-0014](adr/0014-mart-grain-and-transform-cadence.md))
 - [ ] Mart-side reject table, keeping each store to a single writer
       ([ADR-0013](adr/0013-service-owned-pruning.md))
-- [ ] Decide what the mart does with a zero `tid_us`: fall back to `time_us`,
-      reject the row, or carry a null event time. 0 reads as 1970 to anything
-      treating it as a timestamp, and a retention-keyed purge would delete
-      those rows on the first cycle
-      ([ADR-0018](adr/0018-event-time-from-commit-rev.md),
-      [ADR-0012](adr/0012-rolling-retention-window.md))
 - [ ] Cycle trigger at ~15,000 unconsumed rows, taking everything available
       (ADR-0014)
 - [ ] Watermark column + state table for incremental runs

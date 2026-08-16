@@ -52,7 +52,7 @@ class Reader:
         Each pass claims one range, reads it, and returns any unread
         remainder to the queue.
         """
-        self.log.info(f"Reading on {self.endpoint}")
+        self.log.info(f"Reading on {self.endpoint[0]}")
         while self.running:
             if self.start_cursor is None and self.end_cursor is None:
                 try:
@@ -143,6 +143,10 @@ class Reader:
         record from a wanted collection; the cursor still advances past it
         (TDD-0003 §4).
 
+        `tid_us` falls back to `time_us` when `rev` decodes implausibly, so
+        the stored column never carries the zero `sup.util.tid_us` returns
+        (ADR-0018).
+
         Returns `"break"` for either edge of the claimed range, so `run()`
         ends the connection (ADR-0020). Past `end_cursor` the range is
         finished, and the cursor moves there so nothing is re-queued.
@@ -162,9 +166,12 @@ class Reader:
                 return "break"
             if time_us is not None and time_us < self.start_cursor:
                 return "break"
+
             
             if message.get("kind") == "commit" and message.get("did") and commit.get("rkey") and commit.get("rev") and message.get("time_us"):
-                await self.output_queue.put((int(time.time()), message.get("did"), commit.get("rkey"), commit.get("rev"), message.get("time_us"), self.endpoint[0], tid_us(commit.get("rev")), data))
+                event_us = tid_us(commit.get("rev"))
+                event_us = event_us if event_us != 0 else time_us
+                await self.output_queue.put((int(time.time()), message.get("did"), commit.get("rkey"), commit.get("rev"), message.get("time_us"), self.endpoint[0], event_us, data))
 
             # The cursor advances for every kind of message, and holds its
             # previous value when time_us is absent.
