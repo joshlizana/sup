@@ -158,11 +158,11 @@ Demonstrated:
 - [ ] Publish the committed position into the mart, where the transform is
       already the only writer, for ingest to read through DuckDB (ADR-0013).
       Prerequisite for the prune
-- [ ] Ingest prunes `events` below that position, holding a working buffer
-      rather than a window (ADR-0013). Until it lands the raw store
-      accumulates at ~21 GB/day. The prune mirrors into `gap_index` first,
-      in the same pass: coverage the index has not recorded is lost
-      permanently once the rows go, outside the roll-back window
+- [ ] `Maintenance` in the writer module, sharing the writer's connection
+      and running after its flush ([ADR-0021](adr/0021-ingest-maintenance.md)):
+      mirror `gap_index`, read the committed position, prune `events` below
+      it, `incremental_vacuum`. Until it lands the raw store accumulates at
+      ~21 GB/day
 - [ ] Prune `gap_index` on the retention floor — the durable coverage record
       once `events` is a buffer, growing ~400 MB/day unpruned (ADR-0013)
 - [ ] Purge mart rows past the retention floor
