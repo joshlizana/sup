@@ -49,10 +49,11 @@ Accepted costs:
 - **The mart-only rule is restored.** The dashboard is the sole store reader,
   so [TDD-0001](../tdd/0001-architecture-overview.md)'s Goals need no
   exception for the TUI.
-- **ADR-0002's concurrency risk shrinks to one pair.** The unvalidated
-  cross-process case is now transform-writes and dashboard-reads. The TUI,
-  which would have been a third participant polling continuously, is out of
-  it entirely.
+- **ADR-0002's concurrency risk stays on the mart alone.** The unvalidated
+  cross-process case is transform-writes against dashboard-reads, and
+  ingest-reads once it takes the committed position from there
+  ([ADR-0013](0013-service-owned-pruning.md)). The TUI, which would have been
+  a participant polling continuously, is out of it entirely.
 - **An unreachable socket is itself the status.** A stopped service shows as
   unreachable rather than as stale numbers, which is the same signal
   liveness monitoring needs (TDD-0002 §4). One per-service state model —

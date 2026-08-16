@@ -155,7 +155,10 @@ Demonstrated:
 - [ ] Cycle trigger at ~15,000 unconsumed rows, taking everything available
       (ADR-0014)
 - [ ] Watermark column + state table for incremental runs
-- [ ] Publish the committed position where ingest can read it (ADR-0013)
+- [ ] Publish the committed position into the mart, where the transform is
+      already the only writer, for ingest to read through DuckDB (ADR-0013).
+      Prerequisite for the prune — nothing can be deleted until something
+      says what the transform has taken
 - [ ] Ingest prunes `events` below that position, holding a working buffer
       rather than a window (ADR-0013). Until it lands the raw store
       accumulates at ~21 GB/day
