@@ -20,7 +20,7 @@ Accepted
 
 ## Decision
 
-Three changes:
+Two changes:
 
 1. **`current_cursor` only advances.** A message with an older `time_us`
    leaves it unchanged, so a clamped stream cannot rewind a reader's position
@@ -76,17 +76,16 @@ the cursor **backward**. `run()` re-queues that regressed position, the next
 claim replays from there, and each cycle re-reads the window — which is how
 identities reach 15 to 22 copies rather than the 2 an overlap produces.
 
-A run afterwards measured 0.56% duplicates over 27,048,844 rows, flat across
-every pk region and 0.00% in the region the live tail wrote, against a
-predicted 0.556% from shard overlap alone
-([ADR-0010](0010-deduplication-in-the-mart.md)). The mechanism is closed.
+With these changes a run measures 0.56% duplicates over 27,048,844 rows,
+flat across every pk region and 0.00% in the region the live tail writes,
+against 0.556% predicted from shard overlap alone
+([ADR-0010](0010-deduplication-in-the-mart.md)).
 
 Accepted costs:
 
-- **Throughput figures need re-measuring.** Every rate recorded so far counts
-  rows written, and before this fix most of those rows were re-reads after
-  catch-up. Distinct events per second is the accurate metric and is
-  unmeasured.
+- **Rows written and distinct events are now the same figure**, so a rate is
+  readable as either. The live tail settles at 230-250 events/sec and
+  backfill reads 32,000-38,000/s of real history.
 - v2 endpoints stay in the pool, carrying 59.3% of rows from two hosts
   against 40.7% from three v1 hosts on the run above — roughly 2x per host,
   matching their backfill share.

@@ -81,6 +81,6 @@ Accepted costs:
   standalone, with no orchestrator or client involved
   ([ADR-0006](0006-cli-orchestration-model.md),
   [TDD-0002](../tdd/0002-cli-orchestration.md)).
-- The control plane has since grown beyond lock and readiness, carrying
-  pause, resume, shutdown and `status`, with the TUI as a client
+- The control plane carries pause, resume, shutdown and `status` over the
+  same socket, with the TUI as a client
   ([ADR-0015](0015-tui-as-control-plane-client.md)).

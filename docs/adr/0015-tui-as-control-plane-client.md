@@ -47,8 +47,8 @@ existing surface rather than a new one.
 Accepted costs:
 
 - **The mart-only rule is restored.** The dashboard is the sole store reader,
-  so [TDD-0001](../tdd/0001-architecture-overview.md)'s Goals no longer need
-  an exception for the TUI.
+  so [TDD-0001](../tdd/0001-architecture-overview.md)'s Goals need no
+  exception for the TUI.
 - **ADR-0002's concurrency risk shrinks to one pair.** The unvalidated
   cross-process case is now transform-writes and dashboard-reads. The TUI,
   which would have been a third participant polling continuously, is out of

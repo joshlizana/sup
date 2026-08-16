@@ -8,9 +8,11 @@ Accepted
 
 - **Express the validation in SQL.** Port each model's checks to DuckDB JSON
   predicates and emit a `validation` column alongside the extracted fields.
-  1.9x faster, and the data never leaves the engine, so the transform stays
-  one `CREATE TABLE ... AS SELECT`; it reads `$.commit.record.$type` by
-  explicit path, so a record carrying a bare `type` key cannot confuse it.
+  1.9x faster where DuckDB holds the read, and it reads
+  `$.commit.record.$type` by explicit path, so a record carrying a bare
+  `type` key cannot confuse it. The transform reads through SQLite
+  ([ADR-0002](0002-raw-ingestion-durability.md)), so the rows are
+  materialized before any validation runs and that speed is not on offer.
   But routing becomes a `CASE` or filtered inserts rather than a typed
   branch, per-collection column lists live in SQL text, and `models.py` would
   describe a shape nothing enforces. Verified across twelve injected failure
@@ -104,9 +106,3 @@ Accepted costs:
   query. `(CASE WHEN json_valid(payload) THEN payload ELSE '{}' END)` works.
   `events` is unaffected, since its payloads parsed through `orjson` before
   being queued.
-- SQL's 1.9x is no longer recoverable. It rested on the data never leaving
-  the engine, and the transform reads through SQLite now
-  ([ADR-0002](0002-raw-ingestion-durability.md)), so the rows are already
-  materialized before any validation could run. Revisiting means moving the
-  read back to DuckDB first, which is the failing path that decision exists
-  to avoid.

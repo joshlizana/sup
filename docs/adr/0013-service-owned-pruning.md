@@ -37,14 +37,13 @@ the corresponding rows leave `events`.
 The raw store is the product's largest disk consumer by a wide margin:
 27,048,844 rows in 21.1 GB across a continuous 24.24-hour window, at 780
 bytes per row. Almost all of it is real — 0.56% duplicates, which is the
-shard overlap ([ADR-0010](0010-deduplication-in-the-mart.md)) — so this is a
-workload rather than a defect, and it accumulates for as long as nothing
-prunes it.
+shard overlap ([ADR-0010](0010-deduplication-in-the-mart.md)) — and it
+accumulates for as long as nothing prunes it.
 
 Having the transform delete raw rows would open a write connection to the
-SQLite file ingest is writing, turning a read-only attachment into a second
-writer on the same lock, which is the cross-process pattern
-[ADR-0002](0002-raw-ingestion-durability.md) accepted as unvalidated.
+SQLite file ingest is writing, making it a second writer on the same lock.
+[ADR-0002](0002-raw-ingestion-durability.md) keeps one writer per store, and
+the transform's own reads are already the delicate half of that boundary.
 
 Pruning `events` to a buffer also breaks the audit. TDD-0003 §1 derives
 ingest's position by scanning `events` on every start, and ingest holds no

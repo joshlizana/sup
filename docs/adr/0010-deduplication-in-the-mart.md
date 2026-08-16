@@ -103,9 +103,8 @@ Accepted costs:
   99 ms for ordinary inter-event spacing — below the gap detector's floor, so
   the range is never re-fetched. M1 asks for a bounded, documented loss
   window; this is it.
-- **The overlap rate is confirmed at 0.56%**, measured over 27,048,844 rows
-  across 24.24 hours once the live tail stopped replaying clamped ranges
-  ([ADR-0020](0020-live-tail-cursor-clamping.md)). It is the overlap and
+- **The overlap rate is 0.56%**, measured over 27,048,844 rows across 24.24
+  hours ([ADR-0020](0020-live-tail-cursor-clamping.md)). It is the overlap and
   nothing else: 99.44% of identities appear once, 0.560% appear exactly
   twice, and two rows in 27 million appear more often than that. Shards
   advance by thirty minutes plus ten seconds while each is widened ten

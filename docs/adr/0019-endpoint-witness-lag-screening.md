@@ -64,11 +64,9 @@ Accepted costs:
 - **A screened reader is visible.** It keeps running and simply claims
   nothing, and since `Ingester`'s status line counts readers actively
   reading, it shows as missing from `readers:N/M`.
-- **The verdict rests on one message.** The probe reads the first commit it
-  receives, so a single unusually late-witnessed event benches the endpoint
-  for the run. The failure this screens for affects 100% of rows at four
-  orders of magnitude past the threshold, so it cannot hide from one sample;
-  a healthy endpoint's tail can still trip it.
+- **The verdict rests on the probe's first commit message.** The failure it
+  screens for affects 100% of rows at four orders of magnitude past the
+  threshold, so one sample resolves it.
 - Losing an endpoint costs little throughput: the pool already reads near the
   ceiling endpoint capacity sets, and the failing endpoint contributed 8.9%
   of rows, most of them unusable.
