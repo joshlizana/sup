@@ -109,14 +109,13 @@ class Ingester:
         readers = sum(1 for reader in self.readers if reader.reading)
         writer = "Up" if (self.writer_task is not None and not self.writer_task.done()) else "Down"
         return {
-            "readers": f"{readers}/{len(self.readers)}",
-            "throughput": f"{throughput} events/sec",
+            "active_readers": readers,
+            "total_readers": len(self.readers),
+            "throughput": throughput,
             "backfill": self.backfill_queue.qsize(),
             "writer": writer,
             "msgq": self.message_queue.qsize(),
             "dlq": self.dlq_queue.qsize(),
-            "paused": self.paused,
-            "running": self.running
         }
 
 
