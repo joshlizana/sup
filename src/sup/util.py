@@ -11,7 +11,7 @@ import time
 import logging
 from datetime import datetime, timezone
 
-def register(logger, class_name):
+def register(logger: logging.Logger, class_name: str):
     """Return an `Identity` adapter tagged for one instance.
 
     Called once per instance from `__init__`, passing the calling module's
@@ -26,10 +26,10 @@ class Identity(logging.LoggerAdapter):
     """A `LoggerAdapter` that prefixes each message with `Class:token`,
     e.g. `Reader:a1b2c3d4`. The token is fixed for the adapter's life."""
 
-    def __init__(self, logger, identifier: str):
+    def __init__(self, logger: logging.Logger, identifier: str):
         super().__init__(logger, extra={"id": identifier})
 
-    def process(self, msg, kwargs):
+    def process(self, msg: str, kwargs: dict):
         """Prefix the message with the identifier and set `id` on the
         `LogRecord`, where a formatter can reach it as `%(id)s`."""
         now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S %Z")

@@ -1,9 +1,9 @@
-"""Async database clients for the three stores described in ADR-0002.
+"""Async database clients for the stores described in ADR-0002.
 
 Each wraps a driver that runs its blocking calls on a worker thread.
-`SQLiteClient` and `DuckDBClient` take a filename and resolve it against
-the shared data directory; `DucklakeClient` attaches the mart, whose
-location is fixed.
+`SQLiteClient` and `DuckDBClient` take a filename and resolve it against the
+shared data directory, covering `raw.db`, `index.db` and `watermark.db`;
+`DucklakeClient` attaches the mart, whose location is fixed.
 """
 
 import aioduckdb
@@ -69,10 +69,10 @@ class DuckDBClient:
     """Connection to the DuckDB gap index, used by `GapAuditor` for the
     windowed gap scan."""
 
-    def __init__(self, db):
+    def __init__(self, db: str):
         self.data_path = Config().data_path / db
-        self.conn = None
-        self.cursor = None
+        self.conn: aioduckdb.Connection | None = None
+        self.cursor: aioduckdb.Cursor | None = None
         self.log = register(logging.getLogger(__name__), self.__class__.__name__)
 
     async def __aenter__(self):
@@ -112,6 +112,13 @@ class DucklakeClient:
     async def __aenter__(self):
         self.log.info("Initializing Ducklake client")
         self.conn = await aioduckdb.connect(':memory:')
+        # Repository extensions, downloaded into `~/.duckdb` on first use
+        # and raising `IOException` when that fetch fails. Installing ahead
+        # of the LOAD puts a blocked fetch at the connection rather than
+        # inside a transform cycle. Reinstalling an extension already
+        # present takes about a millisecond and reaches no network.
+        await self.conn.execute("INSTALL ducklake")
+        await self.conn.execute("INSTALL sqlite")
         await self.conn.execute("LOAD ducklake;")
         await self.conn.execute("LOAD sqlite;")
         await self.conn.execute(f"ATTACH 'ducklake:sqlite:{self.data_path}/sup.ducklake' AS sup_lake ( DATA_PATH '{self.data_path}' );")

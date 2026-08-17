@@ -1,10 +1,12 @@
-"""Schema creation and DuckDB extension install, run once per process at
-startup.
+"""Schema creation, one function per service, called from that service's
+own invocation (ADR-0022).
 
-Two stores, each with its own file under the shared data directory
-(ADR-0002): `raw.db` holds durable ingested events in SQLite, and
-`index.db` holds the DuckDB gap index the audit scans. Every statement is
-idempotent, so startup repeats safely across restarts.
+`bootstrap_ingest()` covers the two stores ingest writes: `raw.db` holds
+durable ingested events and `index.db` the DuckDB gap index the audit scans.
+`bootstrap_transform()` covers the two the transform writes: the DuckLake
+mart, and `watermark.db` holding the committed position ingest prunes
+against (ADR-0002, ADR-0023). Every statement is idempotent, so startup
+repeats safely across restarts.
 """
 
 from sup.db import SQLiteClient, DuckDBClient, DucklakeClient
@@ -43,18 +45,12 @@ INDEX_SCHEMA = """CREATE TABLE IF NOT EXISTS gap_index (
 );
 """
 async def bootstrap_ingest():
-    """Create both schemas and install the mart's extensions, opening and
-    closing each connection in turn."""
+    """Create the raw store and gap index schemas, opening and closing each
+    connection in turn."""
     async with SQLiteClient("raw.db") as client:
         await client.executescript(RAW_SCHEMA)
     async with DuckDBClient("index.db") as client:
         await client.conn.execute(INDEX_SCHEMA)
-        # Repository extensions, downloaded into `~/.duckdb` on first use
-        # and raising `IOException` when that fetch fails. Reinstalling an
-        # extension already present takes about a millisecond and reaches
-        # no network.
-        await client.conn.execute("INSTALL ducklake")
-        await client.conn.execute("INSTALL sqlite")
 
 POSTS_SCHEMA = """CREATE TABLE IF NOT EXISTS sup_lake.main.posts (
 did           VARCHAR   NOT NULL,  -- 14 to 41 bytes; did:plc: and did:web:
@@ -168,13 +164,20 @@ error         VARCHAR NOT NULL,
 payload       JSON NOT NULL
 );
 """
-WATERMARK_SCHEMA = """CREATE TABLE IF NOT EXISTS sup_lake.main.watermark (
+WATERMARK_SCHEMA = """PRAGMA auto_vacuum=INCREMENTAL;
+                      PRAGMA journal_mode=WAL;
+CREATE TABLE IF NOT EXISTS watermark (
+    enforcer INTEGER DEFAULT 1 CHECK (enforcer = 1) PRIMARY KEY,
     watermark BIGINT NOT NULL
 );
 """
 async def bootstrap_transform():
-    """Create the transform's schema, opening and closing the connection."""
+    """Create the mart schema and the watermark store, opening and closing
+    each connection in turn."""
     async with DucklakeClient() as client:
-        schemas = [POSTS_SCHEMA, LIKES_SCHEMA, REPOSTS_SCHEMA, FOLLOWS_SCHEMA, BLOCKS_SCHEMA, REJECTS_SCHEMA, WATERMARK_SCHEMA]
+        schemas = [POSTS_SCHEMA, LIKES_SCHEMA, REPOSTS_SCHEMA, FOLLOWS_SCHEMA, BLOCKS_SCHEMA, REJECTS_SCHEMA]
         for schema in schemas:
             await client.conn.execute(schema)
+
+    async with SQLiteClient("watermark.db") as client:
+        await client.executescript(WATERMARK_SCHEMA)

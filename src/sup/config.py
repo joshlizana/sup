@@ -19,12 +19,12 @@ class Config(BaseModel):
 
     # Every endpoint carries the same firehose; readers take disjoint time
     # ranges across them. - (endpoint, v2)
-    endpoints: list[tuple[str, int, int]] = [("wss://jetstream1.us-east.bsky.network/subscribe", 0),
-                                            ("wss://jetstream2.us-east.bsky.network/subscribe", 0),
-                                            ("wss://jetstream1.us-west.bsky.network/subscribe", 0),
-                                            ("wss://jetstream2.us-west.bsky.network/subscribe", 0),
-                                            ("wss://jetstream.us-west.bsky.network/subscribe", 1),
-                                            ("wss://jetstream.us-east.bsky.network/subscribe", 1)]
+    endpoints: list[tuple[str, int]] = [("wss://jetstream1.us-east.bsky.network/subscribe", 0),
+                                        ("wss://jetstream2.us-east.bsky.network/subscribe", 0),
+                                        ("wss://jetstream1.us-west.bsky.network/subscribe", 0),
+                                        ("wss://jetstream2.us-west.bsky.network/subscribe", 0),
+                                        ("wss://jetstream.us-west.bsky.network/subscribe", 1),
+                                        ("wss://jetstream.us-east.bsky.network/subscribe", 1)]
 
     @computed_field
     @property

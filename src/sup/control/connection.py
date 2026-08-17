@@ -22,7 +22,7 @@ class SupListener:
     second instance of the same service fails fast with a clear error."""
 
     def __init__(self, service: str):
-        self._auth_key: bytes = None
+        self._auth_key: bytes | None = None
         self.service: str = service
         self.control_path: Path = Config().control_path
         self.listener: Listener | None = None
@@ -94,7 +94,7 @@ class SupClient:
 
     def __init__(self, service: str):
         self.service: str = service
-        self._auth_key: bytes = None
+        self._auth_key: bytes | None = None
         self.control_path: Path = Config().control_path
         self.port: Path = self.control_path / f"{self.service}.port"
         self.client: Client | None = None
