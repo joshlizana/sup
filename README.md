@@ -40,10 +40,32 @@ recorded as they're made:
 - [docs/TODO.md](docs/TODO.md) — roadmap
 - [docs/CHANGELOG.md](docs/CHANGELOG.md) — what's shipped
 
+## Installing `uv`
+
+**macOS and Linux**
+
+```
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+**Windows**
+
+```
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+Package managers carry it as well: `brew install uv`,
+`winget install --id=astral-sh.uv -e`, `scoop install main/uv`, or
+`pipx install uv`. The
+[uv installation docs](https://docs.astral.sh/uv/getting-started/installation/)
+cover every option.
+
+`uv` downloads the Python a project asks for, so Python 3.14 arrives with
+the first `uv sync` and needs no separate install.
+
 ## Running it
 
-From a checkout of this repository, with [`uv`](https://docs.astral.sh/uv/)
-and Python 3.14:
+From a checkout of this repository:
 
 ```
 uv sync                # install dependencies from the lockfile
