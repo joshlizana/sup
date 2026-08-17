@@ -8,15 +8,22 @@
 
 ## Status
 
-Early development. The project is being built as a thin vertical slice —
-see [docs/TODO.md](docs/TODO.md) for the milestone roadmap and current
-progress. Right now, the only thing that works is the scaffold itself:
+Early development, built as a thin vertical slice — see
+[docs/TODO.md](docs/TODO.md) for the milestone roadmap and current progress.
 
-```
-uv run sup
-```
+**Ingestion works.** `sup ingest` connects to Jetstream, detects the gaps
+between what it already holds and what the endpoints still serve, backfills
+them in parallel across sharded range workers, and writes to a SQLite raw
+store through one batched writer. A 24.3-hour run covered 99.93% of seconds
+with no gap over ten seconds, and a `kill -9` mid-stream left the store
+intact with the next start re-reading the lost window.
 
-Ingestion, storage, the mart, the TUI, and the dashboard are not built yet.
+**The mart is under construction.** `sup transform` creates the DuckLake
+mart and the watermark store; the service that fills them is the current
+piece of work.
+
+The TUI, the dashboard, and bare `sup` orchestrating all four are not built
+yet.
 
 ## What this is
 
@@ -35,16 +42,28 @@ recorded as they're made:
 
 ## Running it
 
-From a checkout of this repository:
+From a checkout of this repository, with [`uv`](https://docs.astral.sh/uv/)
+and Python 3.14:
 
 ```
-uv run sup
+uv sync                # install dependencies from the lockfile
+uv run sup --help      # see the available commands
+uv run sup ingest      # start ingesting; Ctrl-C drains and exits
 ```
 
-Once the project reaches a real first milestone, this section will cover
-installing via `uv tool install` / `uvx` per
-[ADR-0003](docs/adr/0003-packaging-and-distribution-via-uv.md), which is the
-intended long-term install path.
+Ingest writes to a `platformdirs` data directory, holds a `flock` while it
+runs, and refuses to start a second instance against the same directory.
+It creates its own schema on first run, so there is no setup step.
+
+Pruning belongs to the transform, which publishes the position ingest
+prunes below ([ADR-0013](docs/adr/0013-service-owned-pruning.md)). Until
+that service exists, a running ingest accumulates about 21 GB a day in the
+raw store and 400 MB a day in the gap index, and a full day of backfill
+lands in under half an hour.
+
+`uv tool install` and `uvx` are the intended install path
+([ADR-0003](docs/adr/0003-packaging-and-distribution-via-uv.md)) and become
+available once the package is published.
 
 ## License
 

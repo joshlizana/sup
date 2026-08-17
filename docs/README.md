@@ -26,8 +26,9 @@ flakiness undermines the entire point of the project.
 - **Python-only.** No dropping into other languages for pieces that are
   annoying in Python.
 - **Prefer libraries, hand-roll gaps.** Use solid, well-established libraries
-  where they exist (e.g. `duckdb`, `textual`, stdlib `sqlite3`). Hand-roll only
-  what has no good library — starting with the Jetstream client itself.
+  where they exist (e.g. `duckdb`, `textual`, `aiosqlite`, `pydantic`).
+  Hand-roll only what has no good library — starting with the Jetstream
+  client itself.
 - **`uv`-first distribution.** Packaging and dependency management target `uv`
   as the primary install path.
 - **Thin vertical slice first.** Get a minimal version of every layer
