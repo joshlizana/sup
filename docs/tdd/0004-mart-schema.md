@@ -59,12 +59,14 @@ the same model.
 ### Columns every table carries
 
 ```sql
+k1            UBIGINT   NOT NULL,  -- hash of did||rkey||rev (ADR-0026)
+k2            UBIGINT   NOT NULL,  -- the same string salted
 did           VARCHAR   NOT NULL,  -- 14 to 41 bytes; did:plc: and did:web:
 rkey          VARCHAR   NOT NULL,  -- 13-byte TID on all but 2 rows
 rev           VARCHAR   NOT NULL,  -- 13-byte TID, no exceptions
 operation     VARCHAR   NOT NULL,  -- create | update | delete
 event_time    TIMESTAMP NOT NULL,  -- decoded from rev (ADR-0018)
-time_us       BIGINT    NOT NULL,  -- stream position
+time_us       UBIGINT   NOT NULL,  -- stream position
 endpoint      VARCHAR   NOT NULL,  -- the connection that witnessed it
 received_at   TIMESTAMP NOT NULL,  -- when ingest wrote it to the raw store
 processed_at  TIMESTAMP NOT NULL,  -- when the transform wrote it here
@@ -78,8 +80,11 @@ ingest-to-mart lag for one row, which the transform's cycle cadence drives
 holds `received_at` as unix seconds, so the transform converts on the way in.
 
 `(did, rkey, rev)` is the deduplication key
-([ADR-0010](../adr/0010-deduplication-in-the-mart.md)). `rkey` is `VARCHAR`
-because two follow rows carry a length other than 13.
+([ADR-0010](../adr/0010-deduplication-in-the-mart.md)), carried alongside as
+`k1 UBIGINT` and `k2 UBIGINT`: a hash of `did||rkey||rev` and a salted hash
+of the same string, which the insert anti-joins on
+([ADR-0026](../adr/0026-uniqueness-on-insert-with-a-two-column-hash-key.md)).
+`rkey` is `VARCHAR` because two follow rows carry a length other than 13.
 
 `event_time` is the raw store's `tid_us`, which the reader fills from the
 decoded `rev` and falls back to `time_us` for a TID that decodes outside 2022
@@ -110,21 +115,27 @@ reply_root_cid   VARCHAR,
 reply_parent_uri VARCHAR,
 reply_parent_cid VARCHAR,
 embed_type       VARCHAR,      -- 37.17%
-embed            JSON,         -- the embed subtree, verbatim
+embed            JSON,         -- the embed subtree; external keeps uri,
+                               -- title and description
 facet_tags       VARCHAR[],    -- #tag features
 facet_links      VARCHAR[],    -- #link features, the uri
 facet_mentions   VARCHAR[],    -- #mention features, the did
-tags             VARCHAR[],    -- 0.94%, record-level, distinct from facets
-self_labels      VARCHAR[],    -- 1.33%, labels.values[].val
-via              VARCHAR       -- 0.57%, a client name such as "TOKIMEKI"
 ```
+
+Three post fields stay out on their measured share: record-level `tags` at
+0.94%, `labels.values[].val` at 1.33%, and the client-name `via` at 0.57%.
+They join the undeclared fields below, reachable through the raw store
+inside its retention window and absent from the mart.
 
 `reply` is `{root, parent}` with both present whenever `reply` is, each a
 strong ref of `{uri, cid}`, so four flat columns carry it without loss.
 
 `embed` keeps its subtree as JSON because the six types below have six
 shapes; `embed_type` carries the discriminator so counts and filters avoid
-the parse. Shares are of the 1,248,626 posts holding an embed:
+the parse. The `external` subtree carries `uri`, `title` and `description`,
+and the blob thumbnail beside them stays out — 7,627 of 8,716 external
+embeds in a 600,000-message sample hold one, and none of the mart's views
+read it. Shares are of the 1,248,626 posts holding an embed:
 
 | `embed_type` | Posts | Share |
 |---|---:|---:|
@@ -163,16 +174,15 @@ returns feed generators and third-party lexicons such as
 on posts" needs the distinction, and parsing an `at://` URI in the dashboard
 costs more than storing the answer.
 
-`via` is a strong ref pointing at the repost the like or repost came through.
-It is absent from `models.py` and covers 3,402,182 likes and 863,199
-reposts — the difference between a like on a post and a like on a post
-someone amplified.
+`via` is a strong ref pointing at the repost the like or repost came through,
+covering 3,402,182 likes and 863,199 reposts — the difference between a like
+on a post and a like on a post someone amplified.
 
 ### `follows` and `blocks`
 
 ```sql
 subject  VARCHAR,   -- 100% of records; a DID, did:plc: or did:web:
-via_uri  VARCHAR,   -- follows 15.88%; blocks: column absent
+via_uri  VARCHAR,   -- follows 15.88%; blocks 0%
 via_cid  VARCHAR
 ```
 
@@ -184,22 +194,25 @@ holding the column costs a NULL that Parquet encodes away.
 ### `rejects`
 
 ```sql
-did          VARCHAR,
-rkey         VARCHAR,
-rev          VARCHAR,
-collection   VARCHAR,
+k1           UBIGINT   NOT NULL,
+k2           UBIGINT   NOT NULL,
+did          VARCHAR   NOT NULL,
+rkey         VARCHAR   NOT NULL,
+rev          VARCHAR   NOT NULL,
+collection   VARCHAR   NOT NULL,   -- read from the payload string
 received_at  TIMESTAMP NOT NULL,
 processed_at TIMESTAMP NOT NULL,
-time_us      BIGINT NOT NULL,
-error        VARCHAR NOT NULL,
-payload      JSON NOT NULL
+time_us      UBIGINT   NOT NULL,
+error        VARCHAR   NOT NULL,
+payload      JSON      NOT NULL
 ```
 
 Validation failures land here, keeping one writer per store
-([ADR-0013](../adr/0013-service-owned-pruning.md)). The identity
-columns are nullable because a payload can fail to parse before they are
-readable. Its row count is an instrument: a rate change means the lexicon
-moved.
+([ADR-0013](../adr/0013-service-owned-pruning.md)). Ingest decodes
+everything outside the record into `raw.events` columns, all of them
+`NOT NULL`, so a rejected row carries its full identity and its key pair
+regardless of what the record held. Its row count is an instrument: a rate
+change means the lexicon moved.
 
 ### Undeclared fields
 
@@ -216,12 +229,27 @@ JSON null on 3,357 records and as a string and array on 1 each. Nothing here
 earns a column, and a typed column would break on the second row. Pydantic
 ignores unknown keys by default, which is the behaviour the transform wants:
 these records validate and land in the mart with their extensions dropped.
+The `embed` subtree is the exception. It carries `extra="allow"`, so an
+undeclared key inside an embed reaches the `embed` JSON column
+([ADR-0024](../adr/0024-strict-at-the-boundary-open-at-the-leaves.md)).
 
 ### Type widths and evolution
 
 DuckLake permits lossless type promotion and refuses narrowing, so a type
 chosen too small is repairable and one chosen too large is not. Every integer
-column is `BIGINT`. Identifier columns are `VARCHAR`: `did` ranges from 14 to
+column is 64 bits wide, unsigned where the value is: `time_us` is a
+microsecond position and `k1`/`k2` fill the full range `hash()` returns. 64
+bits is the ceiling: DuckDB writes `HUGEINT` and
+`UHUGEINT` to Parquet as `DOUBLE`, keeping 53 bits of mantissa and discarding
+the rest without raising. A 128-bit column round-tripped through DuckLake
+returns a different value on every row — 20,000,000 of 20,000,000 measured,
+with distinct values falling from 19,559,726 to 19,359,726. `UBIGINT` writes
+as `INT64`/`UINT_64` and round-trips intact.
+
+Parquet carries 128 bits through other encodings, so a column needing that
+width holds a 16-byte `BLOB`, a 32-character hex string, or a pair of
+`UBIGINT`s. `DECIMAL(38,0)` writes as `FIXED_LEN_BYTE_ARRAY` and round-trips
+exactly across the 29% of the unsigned 128-bit range it spans. Identifier columns are `VARCHAR`: `did` ranges from 14 to
 41 bytes and `did:web:` has no upper bound. Parquet encodes by observed value
 range
 regardless of the declared width, so the generous choice costs no storage.
@@ -235,7 +263,14 @@ nothing in the schema to catch a violation.
 Table names are written qualified, as `sup_lake.main.<table>`. `USE` applies
 to the cursor that runs it, and `aioduckdb` opens a cursor per statement, so
 an unqualified `CREATE TABLE` lands in the in-memory DuckDB the catalog
-attaches to and disappears when the connection closes, raising nothing.
+attaches to and disappears when the connection closes, raising nothing. The
+same boundary governs the per-chunk Arrow flush, which registers its table
+and inserts it through `execute_on_self`
+([ADR-0025](../adr/0025-connection-local-state-in-aioduckdb.md)).
+
+`ATTACH` on a catalog path that holds no catalog creates an empty one and
+succeeds, so a wrong path yields a mart with no tables and no error. The
+catalog is `sup.ducklake` under `Config.ducklake_path`.
 
 The tables are created with `CREATE TABLE IF NOT EXISTS` once at transform
 startup, from the single writer. DDL concurrent with writes is where the
@@ -250,9 +285,6 @@ DuckLake catalog-desync reports cluster.
 - Whether `facet_links` stores the URI or a parsed domain. The domain is
   what a "top linked sites" view groups on, and the URI is what reconstructs
   the link.
-- `models.py` declares neither `via` nor the post fields above `text` and
-  `langs`. The models and this schema converge when the transform is
-  written.
 
 ## Alternatives considered
 

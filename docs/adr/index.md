@@ -24,3 +24,7 @@
 | [0021](0021-service-maintenance.md) | Maintenance shares the writer's connection | Accepted |
 | [0022](0022-per-service-bootstrap.md) | Each service bootstraps its own store | Accepted |
 | [0023](0023-committed-position-in-sqlite.md) | The committed position is its own SQLite store | Accepted |
+| [0024](0024-strict-at-the-boundary-open-at-the-leaves.md) | The models are strict where routing reads them and open elsewhere | Accepted |
+| [0025](0025-connection-local-state-in-aioduckdb.md) | Connection-local DuckDB state goes through `execute_on_self` | Accepted |
+| [0026](0026-uniqueness-on-insert-with-a-two-column-hash-key.md) | Uniqueness is enforced on insert, keyed by two hash columns | Accepted |
+| [0027](0027-transform-cycle-shape.md) | The transform cycle is sequential, chunked, and flushed per chunk | Accepted |

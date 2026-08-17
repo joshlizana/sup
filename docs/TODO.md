@@ -131,56 +131,70 @@ Demonstrated:
 
 ## M2: Minimal mart transform
 
-- [x] `INSTALL ducklake` / `INSTALL sqlite`
+- [x] `INSTALL ducklake` / `INSTALL sqlite` in `DucklakeClient.__aenter__`,
+      ahead of the `LOAD`
       ([ADR-0002](adr/0002-raw-ingestion-durability.md))
-- [ ] `bootstrap_ingest()` creates the raw schemas, called from `sup ingest`,
+- [x] `bootstrap_ingest()` creates the raw schemas, called from `sup ingest`,
       with `main()` handing straight to the Typer app
       ([ADR-0022](adr/0022-per-service-bootstrap.md))
-- [ ] `bootstrap_transform()` installs and loads the extensions, attaches the
-      DuckLake catalog, and creates the mart schema: five per-collection
-      tables plus the reject table, columns in
-      [TDD-0004](tdd/0004-mart-schema.md). The transform calls it and is the
-      mart's only writer (ADR-0022,
-      [ADR-0023](adr/0023-committed-position-in-sqlite.md))
-- [ ] `watermark.db` created by the transform, its only writer (ADR-0023)
-- [ ] Transform reads the raw store through `aiosqlite` and writes to
-      DuckLake, with the Pydantic validation and routing stage between
+- [x] `bootstrap_transform()` attaches the DuckLake catalog and creates the
+      mart schema — five per-collection tables plus the reject table, columns
+      in [TDD-0004](tdd/0004-mart-schema.md) — along with the single-row
+      `watermark` table in `watermark.db`, called from `sup transform`
+      ([ADR-0023](adr/0023-committed-position-in-sqlite.md), ADR-0022)
+- [x] `models.py`: the Pydantic message shape, covering every record-derived
+      column in [TDD-0004](tdd/0004-mart-schema.md). Strict on what routing
+      reads, open on embed and facet feature `$type`
+      ([ADR-0024](adr/0024-strict-at-the-boundary-open-at-the-leaves.md))
+- [ ] Build the transform service behind `sup transform`, keeping it the only
+      writer of the mart and of `watermark.db` (ADR-0022, ADR-0023)
+- [ ] Read the raw store through `aiosqlite` and write to DuckLake, with the
+      Pydantic validation and routing stage between
       ([ADR-0002](adr/0002-raw-ingestion-durability.md))
 - [ ] Deduplicate on `(did, rkey, rev)`
-      ([ADR-0010](adr/0010-deduplication-in-the-mart.md))
-- [ ] Validate with Pydantic
-      ([ADR-0011](adr/0011-record-validation-and-routing-in-the-mart.md)),
-      including negative tests — a clean pass over real data does not show the
-      union discriminates
+      ([ADR-0010](adr/0010-deduplication-in-the-mart.md)), enforced on the
+      insert: one row per key pair within the chunk plus an anti-join on
+      `k1`/`k2` against the destination table, five collections to one
+      transaction
+      ([ADR-0026](adr/0026-uniqueness-on-insert-with-a-two-column-hash-key.md))
+- [ ] Wire `models.py` into the transform, and give the crafted negative
+      cases a home in the repo — a clean pass over real data does not show
+      the union discriminates
+      ([ADR-0011](adr/0011-record-validation-and-routing-in-the-mart.md))
 - [ ] Route to per-collection tables on `commit.collection`, since deletes
-      (3.8%) carry no record. One row per event, every revision kept
+      (3.8%) carry no record, keeping one row per event and every revision
       ([ADR-0014](adr/0014-mart-grain-and-transform-cadence.md))
-- [ ] Mart-side reject table, keeping each store to a single writer
+- [ ] Write validation failures into the mart's `rejects` table, keeping each
+      store to a single writer
       ([ADR-0013](adr/0013-service-owned-pruning.md))
-- [ ] Cycle trigger at ~15,000 unconsumed rows, taking everything available
-      (ADR-0014)
-- [ ] Watermark column + state table for incremental runs
-- [ ] Publish the committed position into `watermark.db`, written by the
-      transform and read by ingest through `aiosqlite`
+- [ ] Trigger a cycle at ~15,000 unconsumed rows, taking everything available
+      in 100,000-row chunks, each validated and flattened in one pass and
+      flushed before the next read, which holds the cycle at ~210 MB
+      whatever the backlog (ADR-0014,
+      [ADR-0027](adr/0027-transform-cycle-shape.md))
+- [ ] Publish the committed position into `watermark.db` once the mart cycle
+      commits, for ingest to read through `aiosqlite`
       ([ADR-0023](adr/0023-committed-position-in-sqlite.md), ADR-0013).
-      Written after the mart cycle commits. Prerequisite for the prune
-- [ ] `Maintenance`, one instance per service, each taking the connection its
-      service writes through and running after that write pass, on a time
-      check ([ADR-0021](adr/0021-service-maintenance.md))
-- [ ] Ingest's instance, in the writer module on the `Writer`'s
+      Prerequisite for the prune
+- [ ] Build `Maintenance`, one instance per service, each taking the
+      connection its service writes through and running after that write
+      pass, on a time check
+      ([ADR-0021](adr/0021-service-maintenance.md))
+- [ ] Add ingest's instance in the writer module on the `Writer`'s
       `SQLiteClient`: mirror `gap_index`, read the committed position, prune
       `events` below it, `incremental_vacuum`, prune `gap_index` on the
       retention floor. Until it lands the raw store accumulates at ~21 GB/day
       and `gap_index` at ~400 MB/day (ADR-0013)
-- [ ] The transform's instance, on its DuckLake connection: purge mart rows
-      past the retention floor
+- [ ] Add the transform's instance on its DuckLake connection: purge mart
+      rows past the retention floor
       ([ADR-0012](adr/0012-rolling-retention-window.md)) with `DELETE`,
       `ducklake_expire_snapshots`, `ducklake_cleanup_old_files`
-- [ ] Control-plane socket + `flock` lock, same design as ingest's
-- [ ] Graceful shutdown finishing the current cycle, working standalone
-- [ ] Same pause/resume/quiesce treatment as ingest (TDD-0002 §6); quiesce is
-      "finish or don't start a cycle"
-- [ ] `status` command reporting the committed watermark (ADR-0015)
+- [ ] Give the transform a control-plane socket and `flock` lock, same design
+      as ingest's
+- [ ] Finish the current cycle on graceful shutdown, working standalone
+- [ ] Give the transform the same pause/resume/quiesce treatment as ingest
+      (TDD-0002 §6); quiesce is "finish or don't start a cycle"
+- [ ] Answer `status` with the committed watermark (ADR-0015)
 
 **Acceptance:** ingest and the transform run together over a window, and
 
@@ -200,15 +214,15 @@ distance, where SQLite's own connection does not (ADR-0002).
 
 ## M3: Minimal operational TUI
 
-- [ ] Connection status, total ingest rate across all connections (TDD-0003
-      §6), ingest/mart lag, error log — all polled over the control plane,
-      with no database connection in the TUI
+- [ ] Poll connection status, total ingest rate across all connections
+      (TDD-0003 §6), ingest/mart lag and the error log over the control
+      plane, holding no database connection in the TUI
       ([ADR-0015](adr/0015-tui-as-control-plane-client.md))
-- [ ] Per-service state model (running, stopping, stopped, unreachable),
+- [ ] Model per-service state (running, stopping, stopped, unreachable),
       shared by the status display and liveness monitoring
-- [ ] Pause/shutdown sent to each service's Listener (TDD-0002 §6)
-- [ ] `ctrl+q` runs the ordered shutdown as a Textual worker with each
-      service's state changing in view; `ctrl+c` keeps Textual's default
+- [ ] Send pause and shutdown to each service's Listener (TDD-0002 §6)
+- [ ] Run the ordered shutdown from `ctrl+q` as a Textual worker with each
+      service's state changing in view, leaving `ctrl+c` on Textual's default
 
 **Acceptance:** the TUI reflects live status without a restart. Pause and
 shutdown from the TUI stop ingestion, and resuming picks up with no gap or
@@ -216,12 +230,12 @@ duplication.
 
 ## M4: Minimal analytics dashboard
 
-- [ ] Streamlit app, a handful of focused views, queries wrapped in
+- [ ] Build the Streamlit app, a handful of focused views, queries wrapped in
       `@st.cache_data`. Streamlit requires `pyarrow<25,>=7.0` and brings it in
       transitively, so leave pyarrow undeclared
-- [ ] Bundled Streamlit config with `gatherUsageStats = false`
-- [ ] `sup dashboard` manages the server process lifecycle
-- [ ] One real question answerable end-to-end (e.g. post volume over time)
+- [ ] Bundle a Streamlit config with `gatherUsageStats = false`
+- [ ] Manage the server process lifecycle from `sup dashboard`
+- [ ] Answer one real question end-to-end (e.g. post volume over time)
 
 **Acceptance:** `sup dashboard` gets from "just installed" to a real chart of
 real data without manual wrangling.
@@ -230,17 +244,18 @@ real data without manual wrangling.
 
 Ties M1–M4 together. Design in [TDD-0002](tdd/0002-cli-orchestration.md).
 
-- [ ] Process spawn into separate process groups
-      (`start_new_session=True` / `CREATE_NEW_PROCESS_GROUP`), TUI in-process
-- [ ] Startup ordering: ingest → its socket becomes connectable → transform →
+- [ ] Spawn processes into separate process groups
+      (`start_new_session=True` / `CREATE_NEW_PROCESS_GROUP`), keeping the
+      TUI in-process
+- [ ] Order startup: ingest → its socket becomes connectable → transform →
       dashboard → TUI
-- [ ] Liveness monitoring: surface an unexpected exit as an error state, no
-      auto-restart in v1
-- [ ] Graceful shutdown in order: ingest → transform → dashboard → TUI
-- [ ] Teardown after `app.run()` returns, covering exit paths no binding sees
-      ([ADR-0015](adr/0015-tui-as-control-plane-client.md))
-- [ ] Subprocess stdout/stderr to per-service log files
-- [ ] Subcommands remain functional standalone
+- [ ] Monitor liveness, surfacing an unexpected exit as an error state, with
+      no auto-restart in v1
+- [ ] Order graceful shutdown: ingest → transform → dashboard → TUI
+- [ ] Tear down after `app.run()` returns, covering exit paths no binding
+      sees ([ADR-0015](adr/0015-tui-as-control-plane-client.md))
+- [ ] Send subprocess stdout/stderr to per-service log files
+- [ ] Keep subcommands functional standalone
 
 **Acceptance:** a clean install running bare `sup` reaches M4's outcome
 without starting each component. Both a clean Ctrl+C and a `kill -9` of the
@@ -248,11 +263,12 @@ parent leave no orphaned subprocesses (TDD-0002 §8).
 
 ## M5: Hardening
 
-- [ ] Deeper reconnect/backfill correctness
-- [ ] Compaction/retention tuning under sustained load
-- [ ] Expand mart schema / dashboard views
-- [ ] Docs polish, ADRs for anything decided along the way
-- [ ] `sup clean`: full data reset, pausing both services if running, with
-      explicit confirmation ([ADR-0008](adr/0008-sup-clean-full-reset.md))
-- [ ] Per-service log files, moved earlier if standalone runs need debugging
-      before orchestration exists
+- [ ] Deepen reconnect and backfill correctness
+- [ ] Tune compaction and retention under sustained load
+- [ ] Expand the mart schema and the dashboard views
+- [ ] Polish the docs, and write ADRs for anything decided along the way
+- [ ] Build `sup clean`: full data reset, pausing both services if running,
+      with explicit confirmation
+      ([ADR-0008](adr/0008-sup-clean-full-reset.md))
+- [ ] Write per-service log files, moved earlier if standalone runs need
+      debugging before orchestration exists

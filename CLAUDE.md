@@ -59,8 +59,13 @@ it into a data mart, and exposes an operational TUI and analytics dashboard,
 as four layers:
 
 ```
-Jetstream → [1] Ingest client → [2] Durable raw store → [3] Mart transform → Data mart → [4a] TUI / [4b] Dashboard
+Jetstream → [1] Ingest client → [2] Durable raw store → [3] Mart transform → Data mart → [4b] Dashboard
 ```
+
+The dashboard is the only store reader. The `[4a]` TUI takes its numbers
+from ingest and the transform over the control plane (ADR-0015). The
+transform publishes the committed position to `watermark.db`, which ingest
+reads to prune the raw store below it (ADR-0023, ADR-0013).
 
 The full design — including what's still open — lives in
 `docs/tdd/0001-architecture-overview.md`; treat it as the authoritative

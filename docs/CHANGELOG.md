@@ -16,12 +16,26 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   persisted authkey, plus `Controller` — accept loop and
   pause/resume/shutdown dispatch. Built ahead of ingest as shared infra.
 - `src/sup/services/ingest/`: `JetstreamClient`, `Reader`, `Writer`,
-  `GapAuditor`, `Ingester`, and Pydantic models. Plus `src/sup/db.py`,
-  `src/sup/boostrap.py`, and `src/sup/util.py`.
-- `bootstrap()` installs the `ducklake` and `sqlite` DuckDB extensions with
-  the schemas. Both are repository extensions fetched into `~/.duckdb` on
-  first use (~71 MB), so a blocked download fails at startup rather than
-  mid-transform. A repeat install costs ~1 ms and reaches no network.
+  `GapAuditor` and `Ingester`. Plus `src/sup/db.py`, `src/sup/boostrap.py`,
+  and `src/sup/util.py`.
+- `src/sup/services/transform/models.py`: the Pydantic message shape the
+  mart validates through, covering every record-derived column in
+  [TDD-0004](tdd/0004-mart-schema.md) — `reply` and `embed` as typed
+  subtrees, `facets` as a list of features, and one `StrongRef` for
+  `subject`, `via`, `root` and `parent`. `commit.collection` and
+  `commit.operation` are `Literal`s; embed and feature `$type` are open
+  strings, so an unrecognised NSID validates and reaches the mart as
+  written. 600,000 sampled messages validate with no rejects, and twenty
+  crafted failures reject on the expected error
+  ([ADR-0011](adr/0011-record-validation-and-routing-in-the-mart.md)).
+- `bootstrap_ingest()` creates the raw store and gap index schemas;
+  `bootstrap_transform()` creates the six mart tables and the single-row
+  `watermark` table. `sup ingest` and `sup transform` each call their own.
+  The `ducklake` and `sqlite` DuckDB extensions install in
+  `DucklakeClient.__aenter__` ahead of the `LOAD`. Both are repository
+  extensions fetched into `~/.duckdb` on first use (~71 MB), so a blocked
+  download fails at the connection rather than inside a transform cycle. A
+  repeat install costs ~1 ms and reaches no network.
 - Graceful-shutdown signal handler on `Controller`, multiplatform via
   `signal.signal` plus `call_soon_threadsafe`. `_stopping` latches so a
   second signal or a draining pause cannot run the hook twice.
@@ -89,6 +103,32 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   another process is writing. Measured on DuckLake for comparison: 11.7 ms
   per write at 500 accumulated snapshots and 13.9 ms at 5,000, 0.13 KB of
   catalog per snapshot, no Parquet written.
+- ADR-0027: the transform runs one sequential cycle over 100,000-row
+  chunks, each validated and flattened in a single pass, bucketed into five
+  Arrow tables, and flushed in one transaction before the next read. One
+  chunk costs ~717 ms end to end (125 ms read, 456 ms validate and flatten,
+  123.5 ms insert, 12 ms commit) at 139,000 rows/s, and peaks at 209.9 MB
+  whatever the backlog holds. Fanning across five tables costs 1.24 µs per
+  row at 100,000 against 6.09 µs at 15,000.
+- ADR-0026: every mart table carries `k1` and `k2` `UBIGINT`, a hash of
+  `did||rkey||rev` and a salted hash of it, computed in the
+  `INSERT ... SELECT` over the registered Arrow table. The insert keeps one
+  row per key pair within the chunk and anti-joins the pair against the
+  destination, with the five collections sharing one transaction. Measured
+  on 20,000,000 real keys per 15,000-row chunk: 53.2 ms for the pair, 43.0 ms
+  for a single 64-bit hash, 166.1 ms for a concatenated string at 32.2 extra
+  bytes per row, 224.1 ms for a three-column join.
+- ADR-0025: registered Arrow tables and `USE` belong to the connection that
+  declared them, so the statements reading them run through
+  `execute_on_self`. Committed rows cross handles freely. `register` then
+  `execute` raises `CatalogException` on the first chunk in 0.19 s;
+  `execute_on_self` mirrors 2,000,000 rows in 20 chunks in 2.4 s, at 837,935
+  rows/s.
+- ADR-0024: the models close the types routing reads — `commit.collection`,
+  `commit.operation`, the record union — and leave embed and facet feature
+  `$type` as open strings. Closing those two would reject 2 posts of 24,602
+  carrying an embed and 4 features of 31,893, each over a subtree no column
+  requires.
 - ADR-0022: `boostrap.py` holds one bootstrap function per service, each
   called from that service's invocation. A single `bootstrap()` ahead of
   Typer's dispatch runs for `sup --help` and in all four orchestrated
@@ -97,6 +137,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- The `posts` table declares eleven record-derived columns. Record-level
+  `tags` (0.94%), `self_labels` (1.33%) and the client-name `via` (0.57%)
+  are read from the raw store within its retention window.
 - ADR-0002 accepted after measuring SQLite, DuckLake, DuckDB single-file,
   Arrow IPC and Parquet on 2M real rows. DuckDB's single-file format locks
   out concurrent readers; raw Parquet lost all 17.16M rows on `SIGKILL`;

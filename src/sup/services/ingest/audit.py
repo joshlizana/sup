@@ -127,7 +127,7 @@ class GapAuditor:
                     pk, time_us = zip(*chunk)
                     tbl = pyarrow.Table.from_arrays([pyarrow.array(pk), pyarrow.array(time_us)], names=["pk", "time_us"])
                     await self.duckdb_client.conn.register("tbl", tbl)
-                    await self.duckdb_client.conn.execute(UPDATE_INDEX_SQL)
+                    await self.duckdb_client.conn.execute_on_self(UPDATE_INDEX_SQL)
 
         except Exception as e:
             self.log.error(f"Error updating index: {e}")

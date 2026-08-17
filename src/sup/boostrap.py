@@ -53,12 +53,14 @@ async def bootstrap_ingest():
         await client.conn.execute(INDEX_SCHEMA)
 
 POSTS_SCHEMA = """CREATE TABLE IF NOT EXISTS sup_lake.main.posts (
+k1            UBIGINT   NOT NULL,  -- hash of did||rkey||rev (ADR-0026)
+k2            UBIGINT   NOT NULL,  -- the same string salted; the pair is one 128-bit key
 did           VARCHAR   NOT NULL,  -- 14 to 41 bytes; did:plc: and did:web:
 rkey          VARCHAR   NOT NULL,  -- 13-byte TID on all but 2 rows
 rev           VARCHAR   NOT NULL,  -- 13-byte TID, no exceptions
 operation     VARCHAR   NOT NULL,  -- create | update | delete
 event_time    TIMESTAMP NOT NULL,  -- decoded from rev (ADR-0018)
-time_us       BIGINT    NOT NULL,  -- stream position
+time_us       UBIGINT   NOT NULL,  -- stream position
 endpoint      VARCHAR   NOT NULL,  -- the connection that witnessed it
 received_at   TIMESTAMP NOT NULL,  -- when the ingest received it
 processed_at  TIMESTAMP NOT NULL,  -- when the transform processed it
@@ -71,22 +73,22 @@ reply_root_cid   VARCHAR,
 reply_parent_uri VARCHAR,
 reply_parent_cid VARCHAR,
 embed_type       VARCHAR,      -- 37.17%
-embed            JSON,         -- the embed subtree, verbatim
+embed            JSON,         -- the embed subtree; external keeps uri,
+                               -- title and description
 facet_tags       VARCHAR[],    -- #tag features
 facet_links      VARCHAR[],    -- #link features, the uri
-facet_mentions   VARCHAR[],    -- #mention features, the did
-tags             VARCHAR[],    -- 0.94%, record-level, distinct from facets
-self_labels      VARCHAR[],    -- 1.33%, labels.values[].val
-via              VARCHAR       -- 0.57%, a client name such as "TOKIMEKI"
+facet_mentions   VARCHAR[]    -- #mention features, the did
 );
 """
 LIKES_SCHEMA = """CREATE TABLE IF NOT EXISTS sup_lake.main.likes (
+k1            UBIGINT   NOT NULL,  -- hash of did||rkey||rev (ADR-0026)
+k2            UBIGINT   NOT NULL,  -- the same string salted; the pair is one 128-bit key
 did           VARCHAR   NOT NULL,  -- 14 to 41 bytes; did:plc: and did:web:
 rkey          VARCHAR   NOT NULL,  -- 13-byte TID on all but 2 rows
 rev           VARCHAR   NOT NULL,  -- 13-byte TID, no exceptions
 operation     VARCHAR   NOT NULL,  -- create | update | delete
 event_time    TIMESTAMP NOT NULL,  -- decoded from rev (ADR-0018)
-time_us       BIGINT    NOT NULL,  -- stream position
+time_us       UBIGINT   NOT NULL,  -- stream position
 endpoint      VARCHAR   NOT NULL,  -- the connection that witnessed it
 received_at   TIMESTAMP NOT NULL,  -- when the ingest received it
 processed_at  TIMESTAMP NOT NULL,  -- when the transform processed it
@@ -100,12 +102,14 @@ via_cid            VARCHAR
 );
 """
 REPOSTS_SCHEMA = """CREATE TABLE IF NOT EXISTS sup_lake.main.reposts (
+k1            UBIGINT   NOT NULL,  -- hash of did||rkey||rev (ADR-0026)
+k2            UBIGINT   NOT NULL,  -- the same string salted; the pair is one 128-bit key
 did           VARCHAR   NOT NULL,  -- 14 to 41 bytes; did:plc: and did:web:
 rkey          VARCHAR   NOT NULL,  -- 13-byte TID on all but 2 rows
 rev           VARCHAR   NOT NULL,  -- 13-byte TID, no exceptions
 operation     VARCHAR   NOT NULL,  -- create | update | delete
 event_time    TIMESTAMP NOT NULL,  -- decoded from rev (ADR-0018)
-time_us       BIGINT    NOT NULL,  -- stream position
+time_us       UBIGINT   NOT NULL,  -- stream position
 endpoint      VARCHAR   NOT NULL,  -- the connection that witnessed it
 received_at   TIMESTAMP NOT NULL,  -- when the ingest received it
 processed_at  TIMESTAMP NOT NULL,  -- when the transform processed it
@@ -119,12 +123,14 @@ via_cid            VARCHAR
 );
 """
 FOLLOWS_SCHEMA = """CREATE TABLE IF NOT EXISTS sup_lake.main.follows (
+k1            UBIGINT   NOT NULL,  -- hash of did||rkey||rev (ADR-0026)
+k2            UBIGINT   NOT NULL,  -- the same string salted; the pair is one 128-bit key
 did           VARCHAR   NOT NULL,  -- 14 to 41 bytes; did:plc: and did:web:
 rkey          VARCHAR   NOT NULL,  -- 13-byte TID on all but 2 rows
 rev           VARCHAR   NOT NULL,  -- 13-byte TID, no exceptions
 operation     VARCHAR   NOT NULL,  -- create | update | delete
 event_time    TIMESTAMP NOT NULL,  -- decoded from rev (ADR-0018)
-time_us       BIGINT    NOT NULL,  -- stream position
+time_us       UBIGINT   NOT NULL,  -- stream position
 endpoint      VARCHAR   NOT NULL,  -- the connection that witnessed it
 received_at   TIMESTAMP NOT NULL,  -- when the ingest received it
 processed_at  TIMESTAMP NOT NULL,  -- when the transform processed it
@@ -136,12 +142,14 @@ via_cid  VARCHAR
 );
 """
 BLOCKS_SCHEMA = """CREATE TABLE IF NOT EXISTS sup_lake.main.blocks (
+k1            UBIGINT   NOT NULL,  -- hash of did||rkey||rev (ADR-0026)
+k2            UBIGINT   NOT NULL,  -- the same string salted; the pair is one 128-bit key
 did           VARCHAR   NOT NULL,  -- 14 to 41 bytes; did:plc: and did:web:
 rkey          VARCHAR   NOT NULL,  -- 13-byte TID on all but 2 rows
 rev           VARCHAR   NOT NULL,  -- 13-byte TID, no exceptions
 operation     VARCHAR   NOT NULL,  -- create | update | delete
 event_time    TIMESTAMP NOT NULL,  -- decoded from rev (ADR-0018)
-time_us       BIGINT    NOT NULL,  -- stream position
+time_us       UBIGINT   NOT NULL,  -- stream position
 endpoint      VARCHAR   NOT NULL,  -- the connection that witnessed it
 received_at   TIMESTAMP NOT NULL,  -- when the ingest received it
 processed_at  TIMESTAMP NOT NULL,  -- when the transform processed it
@@ -153,23 +161,25 @@ via_cid  VARCHAR
 );
 """
 REJECTS_SCHEMA = """CREATE TABLE IF NOT EXISTS sup_lake.main.rejects (
-did           VARCHAR,
-rkey          VARCHAR,
-rev           VARCHAR,
-collection    VARCHAR,
+k1            UBIGINT   NOT NULL,  -- hash of did||rkey||rev (ADR-0026)
+k2            UBIGINT   NOT NULL,  -- the same string salted; the pair is one 128-bit key
+did           VARCHAR   NOT NULL,
+rkey          VARCHAR   NOT NULL,
+rev           VARCHAR   NOT NULL,
+collection    VARCHAR   NOT NULL,
 received_at   TIMESTAMP NOT NULL,  -- when the ingest received it
 processed_at  TIMESTAMP NOT NULL,  -- when the transform processed it
-time_us       BIGINT NOT NULL,
-error         VARCHAR NOT NULL,
-payload       JSON NOT NULL
+time_us       UBIGINT   NOT NULL,
+error         VARCHAR   NOT NULL,
+payload       JSON      NOT NULL
 );
 """
 WATERMARK_SCHEMA = """PRAGMA auto_vacuum=INCREMENTAL;
                       PRAGMA journal_mode=WAL;
 CREATE TABLE IF NOT EXISTS watermark (
     enforcer INTEGER DEFAULT 1 CHECK (enforcer = 1) PRIMARY KEY,
-    watermark BIGINT NOT NULL
-);
+    watermark INTEGER NOT NULL
+) STRICT;
 """
 async def bootstrap_transform():
     """Create the mart schema and the watermark store, opening and closing

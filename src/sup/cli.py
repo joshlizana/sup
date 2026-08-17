@@ -4,7 +4,7 @@ dashboard) attach to `app` as they're built."""
 import typer
 import logging
 import asyncio
-from sup.boostrap import bootstrap_ingest
+from sup.boostrap import bootstrap_ingest, bootstrap_transform
 from sup.services.ingest.ingest import Ingester
 
 app = typer.Typer()
@@ -25,6 +25,12 @@ def ingest():
     except RuntimeError as e:
         print(f"Error: {e}")
         raise typer.Exit(code=1)
+
+@app.command()
+def transform():
+    logger.info("Bootstrapping transform databases...")
+    asyncio.run(bootstrap_transform())
+    logger.info("Starting transform...")
 
 
 @app.callback(invoke_without_command=True)

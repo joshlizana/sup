@@ -10,13 +10,14 @@ Jetstream (network)
       |
       v
 [1] Ingest client  --------->  [2] Durable raw store
-                                        |
-                                        v
-                                [3] Mart transform  --------->  Data mart
-                                                                    |
-                                                    +---------------+---------------+
-                                                    v                               v
-                                          [4a] Operational TUI            [4b] Analytics dashboard
+      ^                                 |
+      |                                 v
+      |                         [3] Mart transform  --------->  Data mart
+      |                                 |                           |
+      |  committed position             |                           v
+      +------ watermark.db <------------+               [4b] Analytics dashboard
+
+[4a] Operational TUI  ---- control plane ---->  [1] ingest, [3] transform
 ```
 
 The first milestone (see [TODO.md](../TODO.md)) is a **thin vertical slice**:
@@ -95,11 +96,18 @@ validated through `models.py`'s discriminated union and routed to
 per-collection tables on `commit.collection`
 ([ADR-0011](../adr/0011-record-validation-and-routing-in-the-mart.md)).
 Routing keys on the collection rather than the matched model because deletes —
-3.8% of rows — carry no record. The columns each table lands in are in
-[TDD-0004](0004-mart-schema.md).
+3.8% of rows — carry no record. The models close the types routing reads and
+leave the rest open, so an unfamiliar embed or facet type validates and
+lands in its column
+([ADR-0024](../adr/0024-strict-at-the-boundary-open-at-the-leaves.md)). The
+columns each table lands in are in [TDD-0004](0004-mart-schema.md).
 
-It reads incrementally via a watermark on the raw store's PK and
-**deduplicates on `(did, rkey, rev)`** as it goes. Reading through SQLite
+It reads incrementally via a watermark on the raw store's PK, in
+100,000-row chunks flushed one at a time
+([ADR-0027](../adr/0027-transform-cycle-shape.md)), and **deduplicates on
+`(did, rkey, rev)`** as it goes, enforced on the insert through a
+two-column hash key
+([ADR-0026](../adr/0026-uniqueness-on-insert-with-a-two-column-hash-key.md)). Reading through SQLite
 rather than DuckDB is what makes those reads reliable while ingest writes
 (ADR-0002).
 

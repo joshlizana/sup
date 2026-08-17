@@ -27,8 +27,9 @@ maintenance pass and prunes `events` below it
 
 The transform commits the mart first and writes the position second. A crash
 between the two leaves the position behind the data, which the next cycle
-reprocesses and the mart deduplicates
-([ADR-0010](0010-deduplication-in-the-mart.md)).
+reprocesses and the insert's anti-join absorbs
+([ADR-0026](0026-uniqueness-on-insert-with-a-two-column-hash-key.md),
+[ADR-0010](0010-deduplication-in-the-mart.md)).
 
 `watermark.db` is part of `sup clean`'s wipe
 ([ADR-0008](0008-sup-clean-full-reset.md)), which is the one path that

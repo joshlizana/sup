@@ -28,6 +28,12 @@ transform resolves duplicates on the way into DuckLake. `(did, rkey, rev)` is
 the identity of an event and the transform picks one row per triple — a hard
 requirement of M2, not an optimization.
 
+The transform resolves them in two places, both on the insert: one row per
+key within the chunk, covering the copies a shard overlap delivers together,
+and an anti-join against the destination table, covering a chunk replayed
+after a crash. Both key on the hash pair in
+[ADR-0026](0026-uniqueness-on-insert-with-a-two-column-hash-key.md).
+
 `pk INTEGER PRIMARY KEY AUTOINCREMENT` stays. It is sequential, so it carries
 none of this cost, and the mart's watermark depends on it
 ([TDD-0003](../tdd/0003-ingest-backfill-and-gap-recovery.md) §7).
