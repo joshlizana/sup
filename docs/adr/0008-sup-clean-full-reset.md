@@ -6,9 +6,10 @@ Accepted
 
 ## Decision
 
-`sup clean` wipes all ingested data — the raw SQLite store, `index.db`, the
-DuckLake catalog, and the DuckLake data files. The raw stores sit under
-`Config.data_path` and the mart under `Config.ducklake_path`.
+`sup clean` wipes all ingested data — the raw SQLite store, `index.db`,
+`watermark.db`, the DuckLake catalog, and the DuckLake data files. The SQLite
+stores sit under `Config.data_path` and the mart under
+`Config.ducklake_path`.
 
 - **Both locks free**, meaning neither service is running: wipe directly.
   Nothing is using the files, so no pause or resume is involved.

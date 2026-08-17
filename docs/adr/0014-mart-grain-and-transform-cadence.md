@@ -8,8 +8,8 @@ Accepted
 
 - **Rollups only.** The transform aggregates into time buckets and writes
   counts: thousands of rows per day, trivial queries, negligible disk. It
-  discards the record text, which ends the content-analysis path and leaves
-  the mart rebuildable into nothing but the same counts.
+  discards the record text, which ends the content-analysis path and puts
+  the only copy of it beyond reach.
 - **One row per event.** Per-collection tables holding every validated
   record, deduped on `(did, rkey, rev)`, with the dashboard aggregating at
   read time. Content analysis becomes a query change rather than a re-model,

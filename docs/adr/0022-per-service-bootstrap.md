@@ -30,15 +30,12 @@ the Typer app.
   per-collection tables and the reject table
   ([TDD-0004](../tdd/0004-mart-schema.md)). The transform calls it.
 
-`bootstrap_ingest()` installs the `ducklake` and `sqlite` extensions, and the
-transform loads what it finds in `~/.duckdb`. Ingest needs both in its own
-right: `Maintenance` takes a DuckLake read for the transform's committed
-position ([ADR-0021](0021-service-maintenance.md),
-[ADR-0013](0013-service-owned-pruning.md)), and a SQLite-backed catalog needs
-the `sqlite` extension to attach at all. The supervisor starts ingest first
-and waits for its socket ([TDD-0002](../tdd/0002-cli-orchestration.md)), so
-one install covers every process, and a blocked download fails at the first
-service to start.
+`bootstrap_transform()` installs and loads the `ducklake` and `sqlite`
+extensions. The transform is the only service holding a DuckLake handle
+([ADR-0023](0023-committed-position-in-sqlite.md)), and a SQLite-backed
+catalog needs the `sqlite` extension to attach at all. Both are repository
+extensions fetched into `~/.duckdb` on first use, so a blocked download
+fails at the transform's startup.
 
 Creating the mart tables belongs to the transform, matching its role as the
 mart's only writer ([ADR-0013](0013-service-owned-pruning.md)). Ingest
@@ -70,9 +67,6 @@ belongs to the same unvalidated family as
 
 Accepted costs:
 
-- The transform's `LOAD` depends on ingest having started first. Subcommands
-  are the supervisor's interface ([ADR-0006](0006-cli-orchestration-model.md)),
-  which owns that ordering.
 - On a first run the mart catalog is absent until the transform creates it,
   and TDD-0002 starts ingest first. Ingest's first maintenance passes find
   no committed position and skip the prune until the transform has run once.

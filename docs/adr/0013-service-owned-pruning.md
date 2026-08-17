@@ -15,17 +15,18 @@ Accepted
   to the file ingest is writing, and ownership of the raw store splits across
   two processes.
 - **Each service prunes its own store.** The transform publishes its
-  committed position into the mart, where it is already the only writer;
-  ingest reads it through DuckDB and prunes below it on its own cadence. One
-  writer per store, raw stays small, and the prune runs in the process that
-  already owns the write connection. The position becomes shared state, and
-  the gap audit needs a coverage record that outlives the rows. Chosen.
+  committed position where it is the only writer; ingest reads it and prunes
+  below it on its own cadence. One writer per store, raw stays small, and the
+  prune runs in the process that already owns the write connection. The
+  position becomes shared state, and the gap audit needs a coverage record
+  that outlives the rows. Chosen.
 
 ## Decision
 
-The transform publishes its committed watermark into the mart; ingest reads
-it from there through DuckDB and prunes below it on its own cadence. Each
-store keeps exactly one writer, and ingest's access to the mart is a read.
+The transform publishes its committed watermark into `watermark.db`, its own
+SQLite store ([ADR-0023](0023-committed-position-in-sqlite.md)); ingest reads
+it through `aiosqlite` and prunes below it on its own cadence. Each store
+keeps exactly one writer.
 
 `gap_index` becomes the durable record of what was ingested. It already fills
 incrementally (`INSERT ... WHERE pk > (SELECT MAX(pk) FROM gap_index)`),

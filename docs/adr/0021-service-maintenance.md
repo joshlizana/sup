@@ -35,7 +35,8 @@ Ingest's instance lives in the writer module and takes the `SQLiteClient` the
 `Writer` already holds, called from `Writer.run()` after its flush pass:
 
 1. Mirror new `(pk, time_us)` into `gap_index`.
-2. Read the transform's committed position from the mart (ADR-0013).
+2. Read the transform's committed position from `watermark.db` (ADR-0013,
+   [ADR-0023](0023-committed-position-in-sqlite.md)).
 3. Delete `events` below that position.
 4. `incremental_vacuum` to return the freed pages
    ([ADR-0002](0002-raw-ingestion-durability.md)).
@@ -88,8 +89,8 @@ Accepted costs:
 - `gap_index` gains its writer here, and `GapAuditor` keeps only the scan it
   runs at startup.
 - Ingest's instance holds three handles: the writer's SQLite connection,
-  DuckDB for `gap_index`, and a DuckLake read for the committed position.
-  The transform's holds one.
+  DuckDB for `gap_index`, and a second SQLite connection for the committed
+  position. The transform's holds one.
 - The two instances share a shape and no steps. Ingest prunes against a
   position another service published; the transform prunes against a clock.
 - A stopped transform holds the prune and the raw store grows until it

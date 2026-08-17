@@ -35,7 +35,7 @@ validated as M1 and M2 land rather than by a throwaway spike.
 
 ## Why
 
-The raw store is the source of truth, so crash safety outranks speed, and
+The raw store is the durability boundary, so crash safety outranks speed, and
 killing the process mid-stream is the first thing a reviewer running it
 locally will try. Measured on 2M real rows at the writer's 10,000-row batch
 size:

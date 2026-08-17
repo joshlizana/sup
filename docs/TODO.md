@@ -131,16 +131,18 @@ Demonstrated:
 
 ## M2: Minimal mart transform
 
-- [x] `INSTALL ducklake` / `INSTALL sqlite` in `bootstrap_ingest()`
-      ([ADR-0002](adr/0002-raw-ingestion-durability.md)), the first service
-      the supervisor starts ([ADR-0022](adr/0022-per-service-bootstrap.md))
+- [x] `INSTALL ducklake` / `INSTALL sqlite`
+      ([ADR-0002](adr/0002-raw-ingestion-durability.md))
 - [ ] `bootstrap_ingest()` creates the raw schemas, called from `sup ingest`,
       with `main()` handing straight to the Typer app
       ([ADR-0022](adr/0022-per-service-bootstrap.md))
-- [ ] `bootstrap_transform()` attaches the DuckLake catalog and creates the mart
-      schema: five per-collection tables plus the reject table, columns in
+- [ ] `bootstrap_transform()` installs and loads the extensions, attaches the
+      DuckLake catalog, and creates the mart schema: five per-collection
+      tables plus the reject table, columns in
       [TDD-0004](tdd/0004-mart-schema.md). The transform calls it and is the
-      mart's only writer (ADR-0022)
+      mart's only writer (ADR-0022,
+      [ADR-0023](adr/0023-committed-position-in-sqlite.md))
+- [ ] `watermark.db` created by the transform, its only writer (ADR-0023)
 - [ ] Transform reads the raw store through `aiosqlite` and writes to
       DuckLake, with the Pydantic validation and routing stage between
       ([ADR-0002](adr/0002-raw-ingestion-durability.md))
@@ -158,9 +160,10 @@ Demonstrated:
 - [ ] Cycle trigger at ~15,000 unconsumed rows, taking everything available
       (ADR-0014)
 - [ ] Watermark column + state table for incremental runs
-- [ ] Publish the committed position into the mart, where the transform is
-      already the only writer, for ingest to read through DuckDB (ADR-0013).
-      Prerequisite for the prune
+- [ ] Publish the committed position into `watermark.db`, written by the
+      transform and read by ingest through `aiosqlite`
+      ([ADR-0023](adr/0023-committed-position-in-sqlite.md), ADR-0013).
+      Written after the mart cycle commits. Prerequisite for the prune
 - [ ] `Maintenance`, one instance per service, each taking the connection its
       service writes through and running after that write pass, on a time
       check ([ADR-0021](adr/0021-service-maintenance.md))
@@ -179,11 +182,21 @@ Demonstrated:
       "finish or don't start a cycle"
 - [ ] `status` command reporting the committed watermark (ADR-0015)
 
-**Acceptance:** delete the mart, rebuild from the raw store, get the same
-result, with the transform running while ingest writes. The read stays on
-`aiosqlite`: DuckDB attaching the raw store fails intermittently with
-`database disk image is malformed` at any watermark distance, where SQLite's
-own connection does not (ADR-0002).
+**Acceptance:** ingest and the transform run together over a window, and
+
+- every event ingested in that window is in the mart exactly once, in the
+  table its `commit.collection` selects, with deletes carrying identity
+  columns and nothing else
+- the transform is killed mid-cycle and resumes from `watermark.db` with the
+  mart gaining no gap and no duplicate
+- the raw store settles at roughly one cycle's backlog while ingest keeps
+  writing, and `gap_index` still covers the pruned range (ADR-0013)
+- `rejects` takes a row for a record the union declines, and stays empty over
+  a clean window (ADR-0011)
+
+The read stays on `aiosqlite`: DuckDB attaching the raw store fails
+intermittently with `database disk image is malformed` at any watermark
+distance, where SQLite's own connection does not (ADR-0002).
 
 ## M3: Minimal operational TUI
 

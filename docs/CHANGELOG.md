@@ -82,6 +82,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   against the stores they own, taking the connection that service already
   writes through and running after its write pass. Each step commits its own
   transaction, so an interrupted pass resumes.
+- ADR-0023: the transform's committed position is a single row in
+  `watermark.db`, read by ingest through `aiosqlite`. SQLite suits a counter
+  overwritten once per cycle, and the read stays off DuckDB's SQLite
+  extension, which ADR-0002 measured failing intermittently against a file
+  another process is writing. Measured on DuckLake for comparison: 11.7 ms
+  per write at 500 accumulated snapshots and 13.9 ms at 5,000, 0.13 KB of
+  catalog per snapshot, no Parquet written.
 - ADR-0022: `boostrap.py` holds one bootstrap function per service, each
   called from that service's invocation. A single `bootstrap()` ahead of
   Typer's dispatch runs for `sup --help` and in all four orchestrated

@@ -23,3 +23,4 @@
 | [0020](0020-live-tail-cursor-clamping.md) | The live tail is defended against cursor clamping | Accepted |
 | [0021](0021-service-maintenance.md) | Maintenance shares the writer's connection | Accepted |
 | [0022](0022-per-service-bootstrap.md) | Each service bootstraps its own store | Accepted |
+| [0023](0023-committed-position-in-sqlite.md) | The committed position is its own SQLite store | Accepted |

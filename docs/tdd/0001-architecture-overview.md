@@ -27,8 +27,11 @@ a minimal version of all four layers working end-to-end.
 **Goals:**
 
 - Each layer replaceable and testable independently.
-- The raw store is the source of truth; the mart is derived and rebuildable
-  from it.
+- The raw store is the durability boundary: an event is safe once it lands
+  there, and the mart derives from it. Ingest prunes it to roughly one
+  transform cycle's backlog
+  ([ADR-0013](../adr/0013-service-owned-pruning.md)), so the mart is the
+  queryable record and `gap_index` the coverage record.
 - The dashboard is the only store reader. The TUI takes its status over the
   control plane ([ADR-0015](../adr/0015-tui-as-control-plane-client.md)).
 
@@ -132,11 +135,11 @@ handful of focused views, with queries wrapped in `@st.cache_data`.
 
 ## Open questions
 
-- **Resolved:** the watermark is a mart table holding the raw-store `pk` the
-  transform has committed ([TDD-0004](0004-mart-schema.md)). It carries the
-  position ingest prunes against
-  ([ADR-0013](../adr/0013-service-owned-pruning.md)), so both services read
-  it.
+- **Resolved:** the committed position is a single row in `watermark.db`,
+  holding the raw-store `pk` the transform has written through
+  ([ADR-0023](../adr/0023-committed-position-in-sqlite.md)). The transform
+  writes it, ingest reads it through `aiosqlite` and prunes against it
+  ([ADR-0013](../adr/0013-service-owned-pruning.md)).
 - **Resolved:** per-collection mart table columns are in
   [TDD-0004](0004-mart-schema.md), measured against a 28,996,394-event raw
   store. Grain, routing and version policy are settled

@@ -201,19 +201,6 @@ columns are nullable because a payload can fail to parse before they are
 readable. Its row count is an instrument: a rate change means the lexicon
 moved.
 
-### `watermark`
-
-```sql
-watermark BIGINT NOT NULL   -- the raw-store pk the transform has committed
-```
-
-The transform's position in the raw store, written at the end of each cycle.
-It is the contract between the two services: the transform is its only
-writer, and ingest reads it to decide what to prune
-([ADR-0013](../adr/0013-service-owned-pruning.md)). Cycles land every ~15,000
-rows ([ADR-0014](../adr/0014-mart-grain-and-transform-cadence.md)), which
-makes this the most frequently written table in the mart.
-
 ### Undeclared fields
 
 Records carry keys outside the lexicon. The full pass found 54 distinct ones,
