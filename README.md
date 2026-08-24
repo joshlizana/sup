@@ -1,4 +1,4 @@
-<h1 align="center">sup</h1>
+<h1 align="center">sup tombstone superseded by spex</h1>
 
 <p align="center">
   A CLI tool that ingests the Bluesky Jetstream firehose, persists it
